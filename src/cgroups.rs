@@ -15,6 +15,47 @@ pub fn init() {
     initialize(&MOUNTS);
     initialize(&DEFAULT_ALLOWED_DEVICES);
     initialize(&APPLIES);
+    initialize(&ENYA_SUBSYSTEMS);
+}
+
+pub fn move_enya_process(
+    cgroups_path: &str, 
+    pid: &str, 
+    cgroup_name: &str
+    ) -> Result<()>  {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let process_dir = format!("{}/{}/{}", cgroups_path, key, cgroup_name);
+        println!("writing procs cgroup{}", &process_dir);
+        write_file(&process_dir, "cgroup.procs", pid)?;
+    }
+    Ok(())
+}
+
+pub fn enya_process_setup(
+    cgroups_path: &str,
+    cgroup_name: &str
+    )-> Result<()> {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let dir = if let Some(s) = path(key, cgroups_path) {
+            s
+        } else {
+            continue;
+        };
+        // i.e., /sys/fs/cgroup/memory/process
+        let process_dir = format!("{}/{}", dir, cgroup_name);
+        debug! {"creating cgroup dir {}", &process_dir};
+        let chain = || format!("create cgroup dir {} failed", &process_dir);
+        create_dir_all(&process_dir).chain_err(chain)?;
+
+        // Create cgroup for subsystem
+        // No defined resources, just default.
+        for k in key.split(',') {
+            if let Some(cgroup_apply) = APPLIES.get(k) {
+                cgroup_apply(&LinuxResources::default(), &process_dir)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn apply(
@@ -29,7 +70,7 @@ pub fn apply(
             continue;
         };
         // ensure cgroup dir
-        debug!{"creating cgroup dir {}", &dir};
+        debug! {"creating cgroup dir {}", &dir};
         let chain = || format!("create cgroup dir {} failed", &dir);
         create_dir_all(&dir).chain_err(chain)?;
         // enter cgroups
@@ -48,6 +89,21 @@ pub fn apply(
     Ok(())
 }
 
+pub fn enya_remove(cgroups_path: &str) -> Result<()> {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let dir = if let Some(s) = path(key, cgroups_path) {
+            s
+        } else {
+            continue;
+        };
+        debug! {"removing cgroup dir {}", &dir};
+        // remove cgroup dir
+        let chain = || format!("remove cgroup dir {} failed", &dir);
+        remove_dir(&dir).chain_err(chain)?;
+    }
+    Ok(())
+}
+
 pub fn remove(cgroups_path: &str) -> Result<()> {
     for key in MOUNTS.keys() {
         let dir = if let Some(s) = path(key, cgroups_path) {
@@ -55,7 +111,7 @@ pub fn remove(cgroups_path: &str) -> Result<()> {
         } else {
             continue;
         };
-        debug!{"removing cgroup dir {}", &dir};
+        debug! {"removing cgroup dir {}", &dir};
         // remove cgroup dir
         let chain = || format!("remove cgroup dir {} failed", &dir);
         remove_dir(&dir).chain_err(chain)?;
@@ -90,7 +146,7 @@ fn try_wrnz<T: ToString + Zero>(
     match wrnz(dir, key, value) {
         Err(Error(ErrorKind::Io(e), x)) => {
             if e.kind() == ::std::io::ErrorKind::PermissionDenied {
-                warn!{"setting cgroup value {} is not supported", key}
+                warn! {"setting cgroup value {} is not supported", key}
                 Ok(())
             } else {
                 Err(Error(ErrorKind::Io(e), x))
@@ -101,19 +157,19 @@ fn try_wrnz<T: ToString + Zero>(
 }
 
 pub fn write_file(dir: &str, file: &str, data: &str) -> Result<()> {
-    let path = format!{"{}/{}", dir, file};
-    debug!{"writing {} to {}", data, &path};
+    let path = format! {"{}/{}", dir, file};
+    debug! {"writing {} to {}", data, &path};
     let mut f = File::create(&path)?;
     f.write_all(data.as_bytes())?;
     Ok(())
 }
 
 pub fn read_file(dir: &str, file: &str) -> Result<(String)> {
-    let path = format!{"{}/{}", dir, file};
+    let path = format! {"{}/{}", dir, file};
     let mut f = File::open(&path)?;
     let mut result = String::new();
     f.read_to_string(&mut result)?;
-    debug!{"read {} from {}", &result, &path};
+    debug! {"read {} from {}", &result, &path};
     Ok(result)
 }
 
@@ -123,20 +179,20 @@ pub fn path(key: &str, cgroups_path: &str) -> Option<String> {
     if mount.is_none() || rel.is_none() {
         None
     } else if rel.unwrap() == "/" {
-        Some(format!{"{}{}", &mount.unwrap(), cgroups_path})
+        Some(format! {"{}{}", &mount.unwrap(), cgroups_path})
     } else {
-        Some(format!{"{}{}{}", &mount.unwrap(), &rel.unwrap(), cgroups_path})
+        Some(format! {"{}{}{}", &mount.unwrap(), &rel.unwrap(), cgroups_path})
     }
 }
 
 pub fn get_procs(key: &str, cgroups_path: &str) -> Vec<Pid> {
     let mut result = Vec::new();
     if let Some(dir) = path(key, cgroups_path) {
-        let path = format!{"{}/cgroup.procs", dir};
+        let path = format! {"{}/cgroup.procs", dir};
         let f = match File::open(path) {
             Ok(f) => f,
             Err(e) => {
-                warn!{"could not cgroup.procs: {}", e};
+                warn! {"could not cgroup.procs: {}", e};
                 return result;
             }
         };
@@ -162,7 +218,7 @@ lazy_static! {
         let f = match File::open("/proc/self/cgroup") {
             Ok(f) => f,
             Err(e) => {
-                warn!{"could not load cgroup info: {}", e};
+                warn! {"could not load cgroup info: {}", e};
                 return result;
             }
         };
@@ -193,7 +249,7 @@ lazy_static! {
         let f = match File::open("/proc/self/mountinfo") {
             Ok(f) => f,
             Err(e) => {
-                warn!{"could not load mount info: {}", e};
+                warn! {"could not load mount info: {}", e};
                 return result;
             }
         };
@@ -293,6 +349,16 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    pub static ref ENYA_SUBSYSTEMS: HashMap<&'static str, Apply> = {
+        let mut m: HashMap<&'static str, Apply> = HashMap::new();
+        m.insert("cpu,cpuacct", null_apply); // no settings for cpuacct
+        m.insert("memory", memory_apply);
+        m.insert("blkio", blkio_apply);
+        m
+    };
+}
+
 type Apply = fn(&LinuxResources, &str) -> Result<()>;
 
 lazy_static! {
@@ -319,7 +385,7 @@ fn copy_parent(dir: &str, file: &str) -> Result<()> {
     let parent = if let Some(o) = dir.rfind('/') {
         &dir[..o]
     } else {
-        bail!{"failed to find {} in parent cgroups", file};
+        bail! {"failed to find {} in parent cgroups", file};
     };
     match read_file(parent, file) {
         Err(Error(ErrorKind::Io(e), _)) => {
@@ -390,7 +456,7 @@ fn memory_apply(r: &LinuxResources, dir: &str) -> Result<()> {
             if s <= 100 {
                 wrnz(dir, "memory.swappiness", memory.swappiness)?;
             } else {
-                warn!{"memory swappiness invalid, working around bug"};
+                warn! {"memory swappiness invalid, working around bug"};
             }
         }
         if r.disable_oom_killer {
@@ -402,7 +468,7 @@ fn memory_apply(r: &LinuxResources, dir: &str) -> Result<()> {
 
 #[inline]
 fn rate(d: &LinuxThrottleDevice) -> String {
-    return format!{"{}:{} {}", d.major, d.minor, d.rate};
+    return format! {"{}:{} {}", d.major, d.minor, d.rate};
 }
 
 fn blkio_apply(r: &LinuxResources, dir: &str) -> Result<()> {
@@ -415,11 +481,11 @@ fn blkio_apply(r: &LinuxResources, dir: &str) -> Result<()> {
             // NOTE: runc writes zero values here. This may be a bug, but
             //       we are duplicating functionality.
             if let Some(w) = d.weight {
-                let weight = format!{"{}:{} {}", d.major, d.minor, w};
+                let weight = format! {"{}:{} {}", d.major, d.minor, w};
                 write_file(dir, "blkio.weight_device", &weight)?;
             }
             if let Some(w) = d.leaf_weight {
-                let weight = format!{"{}:{} {}", d.major, d.minor, w};
+                let weight = format! {"{}:{} {}", d.major, d.minor, w};
                 write_file(dir, "blkio.leaf_weight_device", &weight)?;
             }
         }
@@ -460,7 +526,7 @@ fn net_cls_apply(r: &LinuxResources, dir: &str) -> Result<()> {
 fn net_prio_apply(r: &LinuxResources, dir: &str) -> Result<()> {
     if let Some(network) = r.network.as_ref() {
         for p in &network.priorities {
-            let prio = format!{"{} {}", p.name, p.priority};
+            let prio = format! {"{} {}", p.name, p.priority};
             write_file(dir, "net_prio.ifpriomap", &prio)?;
         }
     }
@@ -469,7 +535,7 @@ fn net_prio_apply(r: &LinuxResources, dir: &str) -> Result<()> {
 
 fn hugetlb_apply(r: &LinuxResources, dir: &str) -> Result<()> {
     for h in &r.hugepage_limits {
-        let key = format!{"hugetlb.{}.limit_in_bytes", h.page_size};
+        let key = format! {"hugetlb.{}.limit_in_bytes", h.page_size};
         write_file(dir, &key, &h.limit.to_string())?;
     }
     Ok(())
@@ -500,7 +566,7 @@ fn write_device(d: &LinuxDeviceCgroup, dir: &str) -> Result<()> {
     } else {
         "*".to_string()
     };
-    let val = format!{"{} {}:{} {}", typ, &major, &minor, &d.access};
+    let val = format! {"{} {}:{} {}", typ, &major, &minor, &d.access};
     write_file(dir, key, &val)
 }
 

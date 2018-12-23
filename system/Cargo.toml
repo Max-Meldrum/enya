@@ -1,0 +1,15 @@
+[package]
+name = "system"
+version = "0.1.0"
+authors = ["Max Meldrum <mmeldrum@kth.se>"]
+edition = "2018"
+
+[dependencies]
+kompact = { git = "https://github.com/kompics/kompact", branch = "master", features = ["protobuf"]}
+bytes = "0.4"
+stats = { path = "../stats" }
+net = { path = "../net" }
+api = { path = "../api" }
+slog = {version = "2.2"}
+oci = {path="../oci"}
+caps = "0.2.0"

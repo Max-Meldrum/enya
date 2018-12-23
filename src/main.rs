@@ -23,6 +23,8 @@ extern crate scopeguard;
 extern crate oci;
 extern crate seccomp_sys;
 
+extern crate system;
+
 mod capabilities;
 mod cgroups;
 mod errors;
@@ -62,6 +64,7 @@ use std::os::unix::fs::symlink;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::result::Result as StdResult;
 use sync::Cond;
+use system::*;
 
 lazy_static! {
     static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
@@ -142,6 +145,7 @@ const CONFIG: &'static str = "config.json";
 const INIT_PID: &'static str = "init.pid";
 const PROCESS_PID: &'static str = "process.pid";
 const TSOCKETFD: RawFd = 9;
+const ENYA_PROCESS_CGROUP: &'static str = "process";
 
 #[cfg(feature = "nightly")]
 static mut ARGC: isize = 0 as isize;
@@ -242,8 +246,8 @@ fn run() -> Result<()> {
         .long("no-init")
         .short("n");
 
-    let matches = App::new("Railcar")
-        .about("Railcar - run a container from an oci-runtime spec file")
+    let matches = App::new("enya")
+        .about("enya - run a container from an oci-runtime spec file")
         .setting(AppSettings::ColoredHelp)
         .author(crate_authors!("\n"))
         .setting(AppSettings::SubcommandRequired)
@@ -274,7 +278,7 @@ fn run() -> Result<()> {
         )
         .arg(
             Arg::with_name("r")
-                .default_value("/run/railcar")
+                .default_value("/run/enya")
                 .help("Dir for state")
                 .long("root")
                 .short("r")
@@ -400,8 +404,8 @@ fn run() -> Result<()> {
     }
 
     let state_dir = matches.value_of("r").unwrap().to_string();
-    debug!("ensuring railcar state dir {}", &state_dir);
-    let chain = || format!("ensuring railcar state dir {} failed", &state_dir);
+    debug!("ensuring enya state dir {}", &state_dir);
+    let chain = || format!("ensuring enya state dir {} failed", &state_dir);
     create_dir_all(&state_dir).chain_err(chain)?;
 
     match matches.subcommand() {
@@ -563,11 +567,11 @@ fn load_console_sockets() -> Result<(RawFd, RawFd)> {
 }
 
 fn finish_create(id: &str, dir: &str, matches: &ArgMatches) -> Result<()> {
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let rootfs = canonicalize(&spec.root.path)
-        .chain_err(|| format!{"failed to find root path {}", &spec.root.path})?
+        .chain_err(|| format! {"failed to find root path {}", &spec.root.path})?
         .to_string_lossy()
         .into_owned();
 
@@ -693,8 +697,8 @@ fn cmd_start(id: &str, state_dir: &str) -> Result<()> {
     let dir = instance_dir(id, state_dir);
     chdir(&*dir).chain_err(|| format!("instance {} doesn't exist", id))?;
 
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let init_pid = get_init_pid()?;
 
@@ -729,7 +733,7 @@ fn cmd_start(id: &str, state_dir: &str) -> Result<()> {
         }
         let linux = spec.linux.as_ref().unwrap();
         let cpath = if linux.cgroups_path == "" {
-            format!{"/{}", id}
+            format! {"/{}", id}
         } else {
             linux.cgroups_path.clone()
         };
@@ -900,7 +904,7 @@ fn cmd_delete(id: &str, state_dir: &str, matches: &ArgMatches) -> Result<()> {
     if let Ok(spec) = Spec::load(CONFIG) {
         let linux = spec.linux.as_ref().unwrap();
         let cpath = if linux.cgroups_path == "" {
-            format!{"/{}", id}
+            format! {"/{}", id}
         } else {
             linux.cgroups_path.clone()
         };
@@ -936,8 +940,8 @@ fn cmd_delete(id: &str, state_dir: &str, matches: &ArgMatches) -> Result<()> {
 fn cmd_run(id: &str, matches: &ArgMatches) -> Result<()> {
     let bundle = matches.value_of("bundle").unwrap();
     chdir(&*bundle).chain_err(|| format!("failed to chdir to {}", bundle))?;
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let child_pid = safe_run_container(
         id,
@@ -1002,12 +1006,12 @@ fn execute_hook(hook: &oci::Hook, state: &oci::State) -> Result<()> {
             }
             // a timeout will cause a failure and child will be killed on exit
             if let Some(sig) = wait_for_pipe_sig(rfd, timeout)? {
-                let msg = format!{"hook exited with signal: {:?}", sig};
+                let msg = format! {"hook exited with signal: {:?}", sig};
                 return Err(ErrorKind::InvalidHook(msg).into());
             }
             let (exit_code, _) = wait_for_child(child)?;
             if exit_code != 0 {
-                let msg = format!{"hook exited with exit code: {}", exit_code};
+                let msg = format! {"hook exited with exit code: {}", exit_code};
                 return Err(ErrorKind::InvalidHook(msg).into());
             }
         }
@@ -1104,7 +1108,7 @@ fn run_container(
     }
 
     let cpath = if linux.cgroups_path == "" {
-        format!{"/{}", id}
+        format! {"/{}", id}
     } else {
         linux.cgroups_path.clone()
     };
@@ -1141,7 +1145,8 @@ fn run_container(
             mount_fd = fd;
             continue;
         }
-        setns(fd, space).chain_err(|| format!("failed to enter {:?}", space))?;
+        setns(fd, space)
+            .chain_err(|| format!("failed to enter {:?}", space))?;
         close(fd)?;
         if space == CloneFlags::CLONE_NEWUSER {
             setid(Uid::from_raw(0), Gid::from_raw(0))
@@ -1173,6 +1178,12 @@ fn run_container(
             .chain_err(|| "failed to init rootfs")?;
     }
 
+    // Set up cgroup for enya process
+    // NOTE: it only creates the cgroups.
+    //       1. No pid is written to cgroup.procs
+    //       2. No resources are specified
+    cgroups::enya_process_setup(&cpath, ENYA_PROCESS_CGROUP)?;
+
     if !init_only {
         // notify first parent that it can continue
         debug!("writing zero to pipe to trigger prestart");
@@ -1188,7 +1199,8 @@ fn run_container(
     }
 
     if cf.contains(CloneFlags::CLONE_NEWNS) {
-        mounts::pivot_rootfs(&*rootfs).chain_err(|| "failed to pivot rootfs")?;
+        mounts::pivot_rootfs(&*rootfs)
+           .chain_err(|| "failed to pivot rootfs")?;
 
         // only set sysctls in newns
         for (key, value) in &linux.sysctl {
@@ -1247,7 +1259,6 @@ fn run_container(
     if !spec.process.cwd.is_empty() {
         chdir(&*spec.process.cwd)?;
     }
-
     debug!("setting ids");
 
     // set uid/gid/groups
@@ -1258,6 +1269,38 @@ fn run_container(
         setgroups(&spec.process.user.additional_gids)?;
     }
 
+    // notify first parent that it can continue
+    debug!("writing zero to pipe to trigger poststart");
+    let data: &[u8] = &[0];
+    write(wfd, data).chain_err(|| "failed to write zero")?;
+
+    if init {
+        if init_only && tsocketfd == -1 {
+            system(&cpath, spec, wfd, daemonize)?;
+        } else {
+            fork_final_child(&cpath, spec, wfd, tsocketfd, daemonize)?;
+        }
+    }
+
+    secure_container(spec, linux)?;
+
+    // we nolonger need wfd, so close it
+    close(wfd).chain_err(|| "could not close wfd")?;
+
+    // wait for trigger
+    if tsocketfd != -1 {
+        listen(tsocketfd, 1)?;
+        let fd = accept(tsocketfd)?;
+        wait_for_pipe_zero(fd, -1)?;
+        close(fd).chain_err(|| "could not close accept fd")?;
+        close(tsocketfd).chain_err(|| "could not close trigger fd")?;
+    }
+
+    do_exec(&spec.process.args[0], &spec.process.args, &spec.process.env)?;
+    Ok(Pid::from_raw(-1))
+}
+
+fn secure_container(spec: &Spec, linux: &Linux) -> Result<()> {
     // NOTE: if we want init to pass signals to other processes, we may want
     //       to hold on to cap kill until after the final fork.
     if spec.process.no_new_privileges {
@@ -1282,34 +1325,7 @@ fn run_container(
             capabilities::drop_privileges(c)?;
         }
     }
-
-    // notify first parent that it can continue
-    debug!("writing zero to pipe to trigger poststart");
-    let data: &[u8] = &[0];
-    write(wfd, data).chain_err(|| "failed to write zero")?;
-
-    if init {
-        if init_only && tsocketfd == -1 {
-            do_init(wfd, daemonize)?;
-        } else {
-            fork_final_child(wfd, tsocketfd, daemonize)?;
-        }
-    }
-
-    // we nolonger need wfd, so close it
-    close(wfd).chain_err(|| "could not close wfd")?;
-
-    // wait for trigger
-    if tsocketfd != -1 {
-        listen(tsocketfd, 1)?;
-        let fd = accept(tsocketfd)?;
-        wait_for_pipe_zero(fd, -1)?;
-        close(fd).chain_err(|| "could not close accept fd")?;
-        close(tsocketfd).chain_err(|| "could not close trigger fd")?;
-    }
-
-    do_exec(&spec.process.args[0], &spec.process.args, &spec.process.env)?;
-    Ok(Pid::from_raw(-1))
+    Ok(())
 }
 
 fn fork_first(
@@ -1366,15 +1382,18 @@ fn fork_first(
                 write_mappings(
                     &format!("/proc/{}/uid_map", child),
                     &linux.uid_mappings,
-                ).chain_err(|| "failed to write uid mappings")?;
+                )
+                .chain_err(|| "failed to write uid mappings")?;
                 write_mappings(
                     &format!("/proc/{}/gid_map", child),
                     &linux.gid_mappings,
-                ).chain_err(|| "failed to write gid mappings")?;
+                )
+                .chain_err(|| "failed to write gid mappings")?;
             }
             // setup cgroups
             let schild = child.to_string();
             cgroups::apply(&linux.resources, &schild, cpath)?;
+
             // notify child
             pcond.notify().chain_err(|| "failed to notify child")?;
 
@@ -1421,6 +1440,8 @@ fn fork_first(
             signals::pass_signals(pid)?;
             let sig = wait_for_pipe_sig(rfd, -1)?;
             let (exit_code, _) = wait_for_child(pid)?;
+            let process_cgroup = format!("{}/{}", &cpath, ENYA_PROCESS_CGROUP);
+            cgroups::enya_remove(&process_cgroup)?;
             cgroups::remove(cpath)?;
             exit(exit_code as i8, sig)?;
         }
@@ -1434,7 +1455,7 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     match fork()? {
         ForkResult::Child => {
             if init {
-                set_name("rc-init")?;
+                set_name("System")?;
             } else if daemonize {
                 // NOTE: if we are daemonizing non-init, we need an additional
                 //       fork to allow process to be reparented to init
@@ -1458,27 +1479,97 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     Ok(())
 }
 
-fn fork_final_child(wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
+fn fork_final_child(
+    cgroups_path: &str,
+    spec: &Spec,
+    wfd: RawFd,
+    tfd: RawFd,
+    daemonize: bool,
+) -> Result<()> {
+    let ccond = Cond::new().chain_err(|| "failed to create cond")?;
+    let (rfd, wfd) =
+        pipe2(OFlag::O_CLOEXEC).chain_err(|| "failed to create pipe")?;
     // fork again so child becomes pid 2
     match fork()? {
         ForkResult::Child => {
+            close(rfd).chain_err(|| "could not close rfd")?;
+            ccond.notify().chain_err(|| "failed to notify parent")?;
             // child continues on
             Ok(())
         }
         ForkResult::Parent { .. } => {
+            close(wfd).chain_err(|| "could not close rfd")?;
+            ccond.wait().chain_err(|| "failed to wait for child")?;
+
+            let cgroup_mount = spec
+                .mounts
+                .iter()
+                .find(|m| m.typ == "cgroup");
+
+            let cgroup_mount_path = &cgroup_mount
+                .expect("Could not locate cgroups mount path")
+                .destination;
+
+            final_enya_setup(&cgroup_mount_path, spec)?;
+
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
-            do_init(wfd, daemonize)?;
+
+            system(cgroups_path, spec, wfd, daemonize)?;
             Ok(())
         }
     }
 }
 
-fn do_init(wfd: RawFd, daemonize: bool) -> Result<()> {
+fn final_enya_setup(cgroups_path: &str, spec: &Spec) -> Result<()> {
+    // At this point, pid 2 is running.
+    // However, the cgroups mount is read-only,
+    // and we have not specified resources or moved the pid.
+    
+    let process_pid: &str = "2";
+    cgroups::move_enya_process(
+        cgroups_path,
+        process_pid,
+        ENYA_PROCESS_CGROUP)?;
+
+    // TODO: 
+    //      1.  split mem/cpu resources for System/Process
+    //      2.  remount cgroup to readonly
+
+    mounts::enya_remount(spec)?;
+    /*
+    if let Some(ref resources) = &linux.resources {
+        if let Some(ref mem) = &resources.memory {
+            println!("YES");
+        }
+
+        if let Some(ref cpu) = &resources.cpu {
+            println!("YES");
+        }
+    }
+    */
+    Ok(())
+}
+
+fn system(
+    cgroups_path: &str, 
+    spec: &Spec, 
+    wfd: RawFd, 
+    daemonize: bool
+    ) -> Result<()> {
     if daemonize {
         close(wfd).chain_err(|| "could not close wfd")?;
     }
+
+    match System::new(spec.clone()) {
+        Ok(system) => system.start(),
+        Err(e) => {
+            error!("{:?}", e);
+            std::process::exit(-1)
+        }
+    }
+
     let s = SigSet::all();
     s.thread_block()?;
     loop {
@@ -1550,7 +1641,7 @@ fn write_mappings(path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
 }
 
 fn set_sysctl(key: &str, value: &str) -> Result<()> {
-    let path = format!{"/proc/sys/{}", key.replace(".", "/")};
+    let path = format! {"/proc/sys/{}", key.replace(".", "/")};
     let fd = match open(&*path, OFlag::O_RDWR, Mode::empty()) {
         Err(::nix::Error::Sys(errno)) => {
             if errno != Errno::ENOENT {
@@ -1657,7 +1748,7 @@ fn wait_for_pipe_zero(rfd: RawFd, timeout: i32) -> Result<()> {
         return Err(ErrorKind::PipeClosed(msg).into());
     }
     if result[0] != 0 {
-        let msg = format!{"got {} from pipe instead of 0", result[0]};
+        let msg = format! {"got {} from pipe instead of 0", result[0]};
         return Err(ErrorKind::InvalidValue(msg).into());
     }
     Ok(())
@@ -1768,8 +1859,8 @@ fn set_name(name: &str) -> Result<()> {
         Ok(_) => (),
     };
     unsafe {
-        let init =
-            std::ffi::CString::new(name).chain_err(|| "invalid process name")?;
+        let init = std::ffi::CString::new(name)
+            .chain_err(|| "invalid process name")?;
         let len = std::ffi::CStr::from_ptr(*ARGV).to_bytes().len();
         // after fork, ARGV points to the thread's local
         // copy of arg0.
