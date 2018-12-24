@@ -1,7 +1,7 @@
 [package]
-name = "railcar"
-version = "1.0.4"
-authors = ["Vishvananda Ishaya Abrams <vish.ishaya@oracle.com>"]
+name = "enya"
+version = "0.1.0"
+authors = ["Max Meldrum <mmeldrum@kth.se>", "Vishvananda Ishaya Abrams <vish.ishaya@oracle.com>"]
 build = "build.rs"
 
 [dependencies]
@@ -17,6 +17,7 @@ oci = { path = "oci" }
 prctl = "1.0.0"
 scopeguard = "^0.3.3"
 seccomp-sys = "0.1.2"
+scout = {path = "scout"}
 
 [features]
 nightly = []

@@ -6,4 +6,4 @@ enya is an extension of Oracle's railcar OCI container runtime.
 
 `enya` is licensed the under Apache License 2.0.
 
-See [LICENSE](LICENSE.txt) for more details.
+See [LICENSE](LICENSE) for more details.

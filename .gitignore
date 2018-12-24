@@ -1,4 +1,7 @@
 target
 Cargo.lock
 railcar
-.wercker
+rootfs
+config.json
+enya
+.gitignore

@@ -23,6 +23,8 @@ extern crate scopeguard;
 extern crate oci;
 extern crate seccomp_sys;
 
+extern crate scout;
+
 mod capabilities;
 mod cgroups;
 mod errors;
@@ -62,6 +64,7 @@ use std::os::unix::fs::symlink;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::result::Result as StdResult;
 use sync::Cond;
+use scout::Scout;
 
 lazy_static! {
     static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
@@ -242,8 +245,8 @@ fn run() -> Result<()> {
         .long("no-init")
         .short("n");
 
-    let matches = App::new("Railcar")
-        .about("Railcar - run a container from an oci-runtime spec file")
+    let matches = App::new("enya")
+        .about("enya - run a container from an oci-runtime spec file")
         .setting(AppSettings::ColoredHelp)
         .author(crate_authors!("\n"))
         .setting(AppSettings::SubcommandRequired)
@@ -274,7 +277,7 @@ fn run() -> Result<()> {
         )
         .arg(
             Arg::with_name("r")
-                .default_value("/run/railcar")
+                .default_value("/run/enya")
                 .help("Dir for state")
                 .long("root")
                 .short("r")
@@ -400,8 +403,8 @@ fn run() -> Result<()> {
     }
 
     let state_dir = matches.value_of("r").unwrap().to_string();
-    debug!("ensuring railcar state dir {}", &state_dir);
-    let chain = || format!("ensuring railcar state dir {} failed", &state_dir);
+    debug!("ensuring enya state dir {}", &state_dir);
+    let chain = || format!("ensuring enya state dir {} failed", &state_dir);
     create_dir_all(&state_dir).chain_err(chain)?;
 
     match matches.subcommand() {
@@ -1290,7 +1293,7 @@ fn run_container(
 
     if init {
         if init_only && tsocketfd == -1 {
-            do_init(wfd, daemonize)?;
+            scout(wfd, daemonize)?;
         } else {
             fork_final_child(wfd, tsocketfd, daemonize)?;
         }
@@ -1434,7 +1437,7 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     match fork()? {
         ForkResult::Child => {
             if init {
-                set_name("rc-init")?;
+                set_name("scout")?;
             } else if daemonize {
                 // NOTE: if we are daemonizing non-init, we need an additional
                 //       fork to allow process to be reparented to init
@@ -1469,16 +1472,20 @@ fn fork_final_child(wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
-            do_init(wfd, daemonize)?;
+            scout(wfd, daemonize)?;
             Ok(())
         }
     }
 }
 
-fn do_init(wfd: RawFd, daemonize: bool) -> Result<()> {
+fn scout(wfd: RawFd, daemonize: bool) -> Result<()> {
     if daemonize {
         close(wfd).chain_err(|| "could not close wfd")?;
     }
+
+    let scout = Scout::new(None);
+    scout.start();
+
     let s = SigSet::all();
     s.thread_block()?;
     loop {
@@ -1512,7 +1519,9 @@ fn do_init(wfd: RawFd, daemonize: bool) -> Result<()> {
             warn!("failed to signal children, {}", e);
         }
     }
+
 }
+
 
 fn do_exec(path: &str, args: &[String], env: &[String]) -> Result<()> {
     let p = CString::new(path.to_string()).unwrap();
