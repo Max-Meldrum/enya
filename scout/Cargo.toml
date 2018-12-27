@@ -6,7 +6,6 @@ edition = "2018"
 
 [dependencies]
 kompact = { git = "https://github.com/kompics/kompact", branch = "master", features = ["protobuf"]}
-protobuf = "2.0"
 bytes = "0.4"
-cgroups = "0.1.0"
 slog = {version = "2.2"}
+net = {path = "net"}

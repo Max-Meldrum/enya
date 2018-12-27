@@ -1,5 +1,3 @@
-// TODO: create tc bindings
-
 #[cfg(test)]
 mod tests {
     #[test]

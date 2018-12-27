@@ -1,7 +1,0 @@
-[package]
-name = "tc"
-version = "0.1.0"
-authors = ["Max Meldrum <max@meldrum.se>"]
-edition = "2018"
-
-[dependencies]

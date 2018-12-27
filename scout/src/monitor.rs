@@ -1,15 +1,32 @@
-use kompact::*;
 use bytes::Buf;
+use kompact::Timer;
+
+use kompact::*;
+use std::time::Duration;
+use std::cell::Cell;
+
+
+use crate::stats::memory::Memory;
+
+
+
+#[derive(Clone, Copy)]
+struct Collect {}
+
 
 #[derive(ComponentDefinition)]
 pub struct Monitor {
-    ctx: ComponentContext<Monitor>
+    ctx: ComponentContext<Monitor>,
+    cgroups_path: String,
+    memory: Memory,
 }
 
 impl Monitor {
-    pub fn new() -> Monitor {
+    pub fn new(path: String) -> Monitor {
         Monitor {
             ctx: ComponentContext::new(),
+            cgroups_path: path,
+            memory: Memory::new(),
         }
     }
 }
@@ -17,40 +34,27 @@ impl Monitor {
 impl Provide<ControlPort> for Monitor {
     fn handle(&mut self, event: ControlEvent) {
         if let ControlEvent::Start = event {
-            info!(self.ctx.log(), "Starting Monitor");
+            let timeout = Duration::from_millis(2000);
+            self.schedule_periodic(timeout, timeout, |self_c, _| {
+                 self_c.actor_ref().tell(Box::new(Collect{}), self_c);
+             });
         }
     }
 }
 
 impl Actor for Monitor {
-    fn receive_local(&mut self, _sender: ActorRef, _msg: Box<Any>) {
-
+    fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {
+        if let Ok(collect) = msg.downcast::<Collect>() {
+            self.memory.stats(&self.cgroups_path);
+            info!(self.ctx.log(), "Memory {:?}", self.memory);
+        }
     }
-    fn receive_message(&mut self, sender: ActorPath, _ser_id: u64, _buf: &mut Buf) {
+    fn receive_message(
+        &mut self,
+        sender: ActorPath,
+        _ser_id: u64,
+        _buf: &mut Buf,
+    ) {
         error!(self.ctx.log(), "Got unexpected message from {}", sender);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use kompact::default_components::DeadletterBox;
-    use std::net::SocketAddr;
-
-    #[test]
-    fn setup() {
-        let socket_addr = SocketAddr::new("127.0.0.1".parse().unwrap(), 2000);
-        let mut cfg = KompicsConfig::new();
-
-        cfg.system_components(DeadletterBox::new, move || {
-            let net_config = NetworkConfig::new(socket_addr);
-            NetworkDispatcher::with_config(net_config)
-        });
-
-        let system = KompicsSystem::new(cfg);
-
-        let monitor = system.create(Monitor::new);
-
-        system.start(&monitor);
     }
 }
