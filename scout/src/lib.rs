@@ -71,7 +71,7 @@ impl Scout {
 
         let monitor_path = self.cgroups_path.clone();
         let monitor = self.system.create_and_register(move || {
-            monitor::Monitor::new(monitor_path)
+            monitor::Monitor::new(monitor_path, None) // TODO: find veth interface
         });
         
         self.system.start(&monitor);

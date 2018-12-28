@@ -1,4 +1,4 @@
 pub mod memory;
-//mod cpu
-//mod network
+pub mod cpu;
+pub mod network;
 //mod io
