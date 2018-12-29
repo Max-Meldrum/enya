@@ -43,19 +43,29 @@ impl Cpu {
         if let Ok(usage) = total_usage {
             let mut cpu_percent = 0.0;
 
-            if let Ok(sys) = Cpu::get_system_cpu_usage() {
+            if let Ok(sys) = self.get_system_cpu_usage() {
                 let cpu_delta = usage as f64 - self.total_usage.get() as f64;
-                let system_delta: f64 = 0.0; // TODO
+                let system_delta = sys as f64 - self.system_usage.get() as f64;
 
                 if cpu_delta > 0.0 && system_delta > 0.0 {
-                    //cpu_percent = (cpu_delta / system_delta) * len(PerCpuUsage) as f64 * 100;
+                    let per_cpu_len = match self.get_per_cpu_usage() {
+                        Ok(vec) => vec.len(),
+                        Err(_) => 0,
+                    };
+                    let percent = (cpu_delta / system_delta) * per_cpu_len as f64 * 100.0;
+                    let formatted = format!("{:.2}", percent).parse::<f64>();
+                    if let Ok(res) = formatted {
+                        cpu_percent= res;
+                    }
                 }
                 self.percentage.set(cpu_percent);
+                self.total_usage.set(usage);
+                self.system_usage.set(sys);
             }
         }
     }
 
-    fn get_system_cpu_usage() -> Result<u64> {
+    fn get_system_cpu_usage(&self) -> Result<u64> {
         match File::open("/proc/stat") {
             Ok(file) => {
                 let mut reader = BufReader::new(file);
@@ -88,17 +98,33 @@ impl Cpu {
             Err(e) => Err(Error::with_cause(ReadFailed, e)),
         }
     }
+
+    fn get_per_cpu_usage(&self) -> Result<Vec<u64>> {
+        let path = &(self.cgroups_path.to_owned() + CPUACCT_USAGE_PERCPU);
+        let line = util::read_string_from(path)?;
+        line.split_whitespace()
+            .map(|x| x.parse::<u64>().map_err(|e| Error::with_cause(ParseError, e)))
+            .collect()
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
 
     #[test]
-    fn parse() {
-        let cpu = Cpu::new("/sys/fs/cgroup/".to_string());
-        let res = Cpu::get_system_cpu_usage(cpu);
-        println!("{}", res.unwrap());
+    fn cpu_usage() {
+        let cpu = Cpu::new(CGROUPS_PATH.to_string());
+        let res = Cpu::get_system_cpu_usage(&cpu);
+        assert!(res.unwrap() > 0);
+    }
+
+    #[test]
+    fn per_cpu() {
+        let cpu = Cpu::new(CGROUPS_PATH.to_string());
+        let res = Cpu::get_per_cpu_usage(&cpu);
+        assert!(res.unwrap().len() > 0);
     }
 }

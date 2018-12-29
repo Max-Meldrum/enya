@@ -41,6 +41,7 @@ impl Monitor {
             MemoryStatus::Critical => info!(self.ctx.log(), "Current Memory Level: Critical!"),
         }
         self.cpu.update();
+        info!(self.ctx.log(), "Cpu: {:?}", self.cpu);
 
         if let Some(mut net) = self.network.clone() {
             net.update();
