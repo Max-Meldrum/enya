@@ -4,13 +4,18 @@ extern crate kompact;
 #[macro_use]
 extern crate slog;
 
+#[macro_use]
+extern crate lazy_static;
+
 mod monitor;
 mod error;
 mod stats;
 mod util;
+mod sysconf;
 
 use kompact::default_components::DeadletterBox;
 pub use kompact::prelude::*;
+pub use lazy_static::*;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
 use std::fs::File;

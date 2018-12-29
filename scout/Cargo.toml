@@ -9,3 +9,7 @@ kompact = { git = "https://github.com/kompics/kompact", branch = "master", featu
 bytes = "0.4"
 slog = {version = "2.2"}
 net = {path = "net"}
+libc = "0.2"
+lazy_static = "1.2.0"
+
+
