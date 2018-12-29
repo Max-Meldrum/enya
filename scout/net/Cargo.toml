@@ -6,4 +6,7 @@ edition = "2018"
 
 [dependencies]
 iptables = "0.2"
+caps = "0.2.0"
+pnet = "0.21.0"
+
 

@@ -4,13 +4,12 @@ use kompact::Timer;
 use kompact::*;
 use std::time::Duration;
 
+use crate::stats::cpu::Cpu;
 use crate::stats::memory::*;
 use crate::stats::network::*;
-use crate::stats::cpu::Cpu;
 
 #[derive(Clone, Copy)]
 struct Collect {}
-
 
 #[derive(ComponentDefinition)]
 pub struct Monitor {
@@ -35,10 +34,18 @@ impl Monitor {
     }
     fn update(&mut self) {
         match self.memory.update() {
-            MemoryStatus::Low => info!(self.ctx.log(), "Current Memory Level: Low"),
-            MemoryStatus::Medium=> info!(self.ctx.log(), "Current Memory Level: Medium"),
-            MemoryStatus::High => info!(self.ctx.log(), "Current Memory Level: High"),
-            MemoryStatus::Critical => info!(self.ctx.log(), "Current Memory Level: Critical!"),
+            MemoryStatus::Low => {
+                info!(self.ctx.log(), "Current Memory Level: Low")
+            }
+            MemoryStatus::Medium => {
+                info!(self.ctx.log(), "Current Memory Level: Medium")
+            }
+            MemoryStatus::High => {
+                info!(self.ctx.log(), "Current Memory Level: High")
+            }
+            MemoryStatus::Critical => {
+                info!(self.ctx.log(), "Current Memory Level: Critical!")
+            }
         }
         self.cpu.update();
         info!(self.ctx.log(), "Cpu: {:?}", self.cpu);
@@ -61,9 +68,10 @@ impl Provide<ControlPort> for Monitor {
     fn handle(&mut self, event: ControlEvent) {
         if let ControlEvent::Start = event {
             let timeout = Duration::from_millis(2000);
-            let timer = self.schedule_periodic(timeout, timeout, |self_c, _| {
-                 self_c.actor_ref().tell(Box::new(Collect{}), self_c);
-             });
+            let timer =
+                self.schedule_periodic(timeout, timeout, |self_c, _| {
+                    self_c.actor_ref().tell(Box::new(Collect {}), self_c);
+                });
 
             self.collect_timer = Some(timer);
         }

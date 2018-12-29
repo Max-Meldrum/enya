@@ -5,11 +5,9 @@ use std::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ErrorKind {
-    ReadFailed,
-    InvalidPath,
-    ParseError,
-    CpuParseError,
-    InvalidData,
+    IpTablesError,
+    NetAdminError,
+    TcError,
 }
 
 #[derive(Debug)]
@@ -21,11 +19,9 @@ pub struct Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let msg = match self.kind {
-            ErrorKind::ReadFailed => "Gnable to read file",
-            ErrorKind::ParseError => "Unable to parse data",
-            ErrorKind::CpuParseError => "Unable to parse CPU fields",
-            ErrorKind::InvalidPath => "Bad path given",
-            ErrorKind::InvalidData => "Bad data given",
+            ErrorKind::IpTablesError => "IpTables failed",
+            ErrorKind::NetAdminError => "CAP_NET_ADMIN permission not set",
+            ErrorKind::TcError => "Traffic Control failed",
         };
         write!(f, "{}", msg)
     }

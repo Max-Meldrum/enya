@@ -7,19 +7,18 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 
-mod monitor;
 mod error;
+mod monitor;
 mod stats;
-mod util;
 mod sysconf;
+mod util;
 
 use kompact::default_components::DeadletterBox;
 pub use kompact::prelude::*;
 pub use lazy_static::*;
+use std::fs::File;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
-use std::fs::File;
-
 
 const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
 const SCOUT_HOST: &str = "127.0.0.1";
@@ -48,7 +47,7 @@ impl Scout {
         let meta = file.metadata()?;
         assert_eq!(meta.permissions().readonly(), true);
         Ok(())
-    } 
+    }
 
     fn system_setup() -> KompicsSystem {
         let ip_addr = SCOUT_HOST
@@ -78,7 +77,7 @@ impl Scout {
         let monitor = self.system.create_and_register(move || {
             monitor::Monitor::new(monitor_path, None) // TODO: find veth interface
         });
-        
+
         self.system.start(&monitor);
     }
 
@@ -94,6 +93,6 @@ mod tests {
     #[test]
     fn scout_setup() {
         let scout = Scout::new(None); // Assume default cgroups path
-        //scout.unwrap().start();
+                                      //scout.unwrap().start();
     }
 }

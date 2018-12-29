@@ -29,7 +29,7 @@ impl Network {
         let rx_packets = util::read_u64_from(&rx_packets_path);
 
         let tx_bytes_path = Network::path(self, "tx_bytes");
-        let tx_bytes= util::read_u64_from(&tx_bytes_path);
+        let tx_bytes = util::read_u64_from(&tx_bytes_path);
 
         let tx_packets_path = Network::path(self, "tx_packets");
         let tx_packets = util::read_u64_from(&tx_packets_path);
@@ -42,6 +42,9 @@ impl Network {
     }
 
     fn path(&mut self, file_name: &str) -> String {
-        "sys/class/net".to_owned() + &self.veth.to_owned() + "/statistics/" + file_name
+        "sys/class/net".to_owned()
+            + &self.veth.to_owned()
+            + "/statistics/"
+            + file_name
     }
 }

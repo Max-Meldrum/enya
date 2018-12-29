@@ -4,7 +4,7 @@ use std::cell::Cell;
 const MEMORY_USAGE: &str = "memory/memory.usage_in_bytes";
 const MEMORY_LIMIT: &str = "memory/memory.limit_in_bytes";
 
-// LOW: >= 0 <= 30 
+// LOW: >= 0 <= 30
 // MEDIUM: > 30 <= 60
 // HIGH: > 60 < 95
 // CRITICAL: >= 95

@@ -4,20 +4,18 @@ use std::cell::Cell;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use crate::sysconf::*;
-use crate::error::*;
 use crate::error::ErrorKind::*;
-
+use crate::error::*;
+use crate::sysconf::*;
 
 lazy_static! {
-    static ref CLOCK_TICKS: u64 = clock_ticks().
-        expect("Unable to fetch clock ticks from sysconf");
+    static ref CLOCK_TICKS: u64 =
+        clock_ticks().expect("Unable to fetch clock ticks from sysconf");
 }
 
 const CPUACCT_USAGE: &str = "cpu/cpuacct.usage";
 const CPUACCT_USAGE_PERCPU: &str = "cpu/cpuacct.usage_percpu";
 const NANO_PER_SEC: u64 = 1_000_000_000;
-
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -52,10 +50,11 @@ impl Cpu {
                         Ok(vec) => vec.len(),
                         Err(_) => 0,
                     };
-                    let percent = (cpu_delta / system_delta) * per_cpu_len as f64 * 100.0;
+                    let percent =
+                        (cpu_delta / system_delta) * per_cpu_len as f64 * 100.0;
                     let formatted = format!("{:.2}", percent).parse::<f64>();
                     if let Ok(res) = formatted {
-                        cpu_percent= res;
+                        cpu_percent = res;
                     }
                 }
                 self.percentage.set(cpu_percent);
@@ -70,7 +69,8 @@ impl Cpu {
             Ok(file) => {
                 let mut reader = BufReader::new(file);
                 let mut line = String::new();
-                let _ = reader.read_line(&mut line)
+                let _ = reader
+                    .read_line(&mut line)
                     .map_err(|e| Error::with_cause(ReadFailed, e));
 
                 let mut fields = line.split_whitespace();
@@ -83,7 +83,11 @@ impl Cpu {
                             Err(Error::new(CpuParseError))
                         } else {
                             let ticks: Result<u64> = fields
-                                .map(|x| x.parse::<u64>().map_err(|e| Error::with_cause(ParseError, e)))
+                                .map(|x| {
+                                    x.parse::<u64>().map_err(|e| {
+                                        Error::with_cause(ParseError, e)
+                                    })
+                                })
                                 .sum::<Result<u64>>()
                                 .map(|x| (x * NANO_PER_SEC) / *CLOCK_TICKS);
                             ticks
@@ -94,7 +98,7 @@ impl Cpu {
                 } else {
                     Err(Error::new(CpuParseError))
                 }
-            },
+            }
             Err(e) => Err(Error::with_cause(ReadFailed, e)),
         }
     }
@@ -103,11 +107,13 @@ impl Cpu {
         let path = &(self.cgroups_path.to_owned() + CPUACCT_USAGE_PERCPU);
         let line = util::read_string_from(path)?;
         line.split_whitespace()
-            .map(|x| x.parse::<u64>().map_err(|e| Error::with_cause(ParseError, e)))
+            .map(|x| {
+                x.parse::<u64>()
+                    .map_err(|e| Error::with_cause(ParseError, e))
+            })
             .collect()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
