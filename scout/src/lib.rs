@@ -12,6 +12,7 @@ mod monitor;
 mod stats;
 mod sysconf;
 mod util;
+mod net;
 
 use kompact::default_components::DeadletterBox;
 pub use kompact::prelude::*;
@@ -19,6 +20,11 @@ pub use lazy_static::*;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
+use caps::{CapSet, Capability};
+
+use crate::net::*;
+use crate::error::*;
+use crate::error::ErrorKind::*;
 
 const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
 const SCOUT_HOST: &str = "127.0.0.1";
@@ -31,22 +37,34 @@ pub struct Scout {
 
 impl Scout {
     #[cfg(target_os = "linux")]
-    pub fn new(cgroups_path: Option<String>) -> Result<Scout, std::io::Error> {
+    pub fn new(cgroups_path: Option<String>) -> Result<Scout> {
         let path = cgroups_path.unwrap_or_else(|| String::from(CGROUPS_PATH));
 
-        Scout::verify_permissions(path.clone())?;
+        let _ = Scout::check_cgroups(path.clone())
+            .map_err(|e| Error::with_cause(CgroupsReadError, e));
 
-        Ok(Scout {
-            cgroups_path: path,
-            system: Scout::system_setup(),
-        })
+        if !Scout::is_net_admin() {
+            Err(Error::new(NetAdminError))
+        } else {
+            Ok(Scout {
+                cgroups_path: path,
+                system: Scout::system_setup(),
+            })
+        }
+
     }
 
-    fn verify_permissions(path: String) -> std::io::Result<()> {
+    fn check_cgroups(path: String) -> std::io::Result<()> {
         let file = File::open(path + "memory/memory.stat")?;
         let meta = file.metadata()?;
         assert_eq!(meta.permissions().readonly(), true);
         Ok(())
+    }
+
+    fn is_net_admin() -> bool {
+        let net_admin =
+            caps::has_cap(None, CapSet::Permitted, Capability::CAP_NET_ADMIN);
+        net_admin.unwrap_or(false)
     }
 
     fn system_setup() -> KompicsSystem {

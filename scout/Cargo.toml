@@ -8,8 +8,11 @@ edition = "2018"
 kompact = { git = "https://github.com/kompics/kompact", branch = "master", features = ["protobuf"]}
 bytes = "0.4"
 slog = {version = "2.2"}
-net = {path = "net"}
 libc = "0.2"
 lazy_static = "1.2.0"
+iptables = "0.2"
+caps = "0.2.0"
+pnet = "0.21.0"
+
 
 

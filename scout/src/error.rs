@@ -10,6 +10,8 @@ pub enum ErrorKind {
     ParseError,
     CpuParseError,
     InvalidData,
+    NetAdminError,
+    CgroupsReadError,
 }
 
 #[derive(Debug)]
@@ -26,6 +28,8 @@ impl fmt::Display for Error {
             ErrorKind::CpuParseError => "Unable to parse CPU fields",
             ErrorKind::InvalidPath => "Bad path given",
             ErrorKind::InvalidData => "Bad data given",
+            ErrorKind::NetAdminError => "CAP_NET_ADMIN permission not set",
+            ErrorKind::CgroupsReadError => "Not able to read from given cgroups path", 
         };
         write!(f, "{}", msg)
     }

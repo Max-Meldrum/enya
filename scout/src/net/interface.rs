@@ -23,5 +23,4 @@ mod tests {
         assert_eq!(ifaces.len(), 1);
         assert_eq!(ifaces.first().unwrap().is_loopback(), true);
     }
-
 }
