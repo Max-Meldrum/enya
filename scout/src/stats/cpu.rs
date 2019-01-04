@@ -22,7 +22,7 @@ pub struct Cpu {
     cgroups_path: String,
     total_usage: Cell<u64>,
     system_usage: Cell<u64>,
-    percentage: Cell<f64>,
+    pub percentage: Cell<f64>,
 }
 
 impl Cpu {

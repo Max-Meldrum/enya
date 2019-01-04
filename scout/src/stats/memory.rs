@@ -10,7 +10,7 @@ const MEMORY_LIMIT: &str = "memory/memory.limit_in_bytes";
 // CRITICAL: >= 95
 const LOW: u16 = 30;
 const MEDIUM: u16 = 60;
-const HIGH: u16 = 80;
+const HIGH: u16 = 95;
 
 pub enum MemoryStatus {
     Low,
@@ -51,7 +51,7 @@ impl Memory {
         let mut mem_percent: f32 = 0.0;
 
         if self.limit.get() != 0 {
-            let avg = self.usage.get() as f32 / self.limit.get() as f32;
+            let avg = self.usage.get() as f32 / self.limit.get() as f32 * 100.0;
             let f = format!("{:.2}", avg).parse::<f32>();
             if let Ok(v) = f {
                 mem_percent = v;
@@ -60,7 +60,7 @@ impl Memory {
 
         self.procentage.set(mem_percent);
 
-        let level = (self.procentage.get() * 100 as f32) as u16;
+        let level = (self.procentage.get()) as u16;
 
         if level <= LOW {
             MemoryStatus::Low

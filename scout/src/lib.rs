@@ -7,6 +7,7 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 
+
 mod error;
 mod monitor;
 mod stats;
@@ -22,7 +23,7 @@ use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
 use caps::{CapSet, Capability};
 
-use crate::net::*;
+use crate::net::interface::*;
 use crate::error::*;
 use crate::error::ErrorKind::*;
 
@@ -91,9 +92,12 @@ impl Scout {
             "Starting Scout at {}:{}", SCOUT_HOST, SCOUT_PORT
         );
 
+
         let monitor_path = self.cgroups_path.clone();
         let monitor = self.system.create_and_register(move || {
-            monitor::Monitor::new(monitor_path, None) // TODO: find veth interface
+            let interface = find_interface("eth0");
+            //monitor::Monitor::new(monitor_path, interface.and_then(|i| Some(String::from("eth0"))))
+            monitor::Monitor::new(monitor_path, Some(String::from("eth0")))
         });
 
         self.system.start(&monitor);

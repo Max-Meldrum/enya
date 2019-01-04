@@ -6,7 +6,12 @@ use std::time::Duration;
 
 use crate::stats::cpu::Cpu;
 use crate::stats::memory::*;
+use crate::stats::io::*;
 use crate::stats::network::*;
+
+extern crate pnet;
+
+use pnet::datalink::{self, NetworkInterface};
 
 #[derive(Clone, Copy)]
 struct Collect {}
@@ -19,6 +24,7 @@ pub struct Monitor {
     memory: Memory,
     cpu: Cpu,
     network: Option<Network>,
+    io: Option<Io>,
 }
 
 impl Monitor {
@@ -28,8 +34,9 @@ impl Monitor {
             collect_timer: None,
             cgroups_path: path.clone(),
             memory: Memory::new(path.clone()),
-            cpu: Cpu::new(path),
+            cpu: Cpu::new(path.clone()),
             network: iface.and_then(|i| Some(Network::new(i))),
+            io: Some(Io::new(path)),
         }
     }
     fn update(&mut self) {
@@ -47,10 +54,11 @@ impl Monitor {
                 info!(self.ctx.log(), "Current Memory Level: Critical!")
             }
         }
+        info!(self.ctx.log(), "Memory: {}%", self.memory.procentage.get());
         self.cpu.update();
-        info!(self.ctx.log(), "Cpu: {:?}", self.cpu);
+        info!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage.get());
 
-        if let Some(mut net) = self.network.clone() {
+        if let Some(net) = self.network.as_mut() {
             net.update();
             info!(self.ctx.log(), "Network: {:?}", net);
         }

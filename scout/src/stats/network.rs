@@ -3,7 +3,7 @@ use std::cell::Cell;
 
 #[derive(Debug, Clone)]
 pub struct Network {
-    veth: String,
+    interface: String,
     pub rx_bytes: Cell<u64>,
     pub rx_packets: Cell<u64>,
     pub tx_bytes: Cell<u64>,
@@ -13,7 +13,7 @@ pub struct Network {
 impl Network {
     pub fn new(iface: String) -> Network {
         Network {
-            veth: iface,
+            interface: iface,
             rx_bytes: Cell::new(0),
             rx_packets: Cell::new(0),
             tx_bytes: Cell::new(0),
@@ -42,9 +42,23 @@ impl Network {
     }
 
     fn path(&mut self, file_name: &str) -> String {
-        "sys/class/net".to_owned()
-            + &self.veth.to_owned()
+        "/sys/class/net/".to_owned()
+            + &self.interface.to_owned()
             + "/statistics/"
             + file_name
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_test() {
+        let mut network = Network::new(String::from("lo"));
+        network.update();
+        // Might be the case that this is actually zero
+        assert!(network.rx_bytes.get() > 0);
     }
 }
