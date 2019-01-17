@@ -28,14 +28,14 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new(path: String, iface: Option<String>) -> Monitor {
+    pub fn new(path: String, interface: Option<String>) -> Monitor {
         Monitor {
             ctx: ComponentContext::new(),
             collect_timer: None,
             cgroups_path: path.clone(),
             memory: Memory::new(path.clone()),
             cpu: Cpu::new(path.clone()),
-            network: iface.and_then(|i| Some(Network::new(i))),
+            network: interface.and_then(|i| Some(Network::new(i))),
             io: Some(Io::new(path)),
         }
     }
@@ -58,9 +58,15 @@ impl Monitor {
         self.cpu.update();
         info!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage.get());
 
+
         if let Some(net) = self.network.as_mut() {
             net.update();
             info!(self.ctx.log(), "Network: {:?}", net);
+        }
+
+        if let Some(io) = self.io.as_mut() {
+            io.update();
+            info!(self.ctx.log(), "IO: {:?}", io);
         }
     }
 
