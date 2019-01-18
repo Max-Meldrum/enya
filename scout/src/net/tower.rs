@@ -25,9 +25,7 @@ impl Provide<ControlPort> for ControlTower {
 }
 
 impl Actor for ControlTower {
-    fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {
-
-    }
+    fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {}
 
     fn receive_message(
         &mut self,

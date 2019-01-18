@@ -13,6 +13,7 @@ pub enum ErrorKind {
     InvalidData,
     NetAdminError,
     CgroupsReadError,
+    TcNotFound,
 }
 
 #[derive(Debug)]
@@ -27,11 +28,14 @@ impl fmt::Display for Error {
             ErrorKind::ReadFailed => "Gnable to read file",
             ErrorKind::ParseError => "Unable to parse data",
             ErrorKind::CpuParseError => "Unable to parse CPU fields",
-            ErrorKind::BlkioParseError=> "Unable to parse Blkio files",
+            ErrorKind::BlkioParseError => "Unable to parse Blkio files",
             ErrorKind::InvalidPath => "Bad path given",
             ErrorKind::InvalidData => "Bad data given",
             ErrorKind::NetAdminError => "CAP_NET_ADMIN permission not set",
-            ErrorKind::CgroupsReadError => "Not able to read from given cgroups path", 
+            ErrorKind::CgroupsReadError => {
+                "Not able to read from given cgroups path"
+            }
+            ErrorKind::TcNotFound => "Linux Traffic Control not found",
         };
         write!(f, "{}", msg)
     }

@@ -12,7 +12,3 @@ libc = "0.2"
 lazy_static = "1.2.0"
 iptables = "0.2"
 caps = "0.2.0"
-pnet = "0.21.0"
-
-
-

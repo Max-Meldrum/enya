@@ -19,9 +19,9 @@ pub struct Io {
 impl Io {
     pub fn new(cgroups_path: String) -> Io {
         Io {
-           cgroups_path,
-           write: Cell::new(0),
-           read: Cell::new(0),
+            cgroups_path,
+            write: Cell::new(0),
+            read: Cell::new(0),
         }
     }
 
@@ -46,22 +46,28 @@ impl Io {
                 let read_vec: Vec<_> = line.split_whitespace().collect();
                 if read_vec.len() > 2 {
                     if read_vec[1] == "Read" {
-                        let bytes_read = read_vec[2].parse::<u64>()
+                        let bytes_read = read_vec[2]
+                            .parse::<u64>()
                             .map_err(|e| Error::with_cause(ParseError, e));
 
                         line.clear();
                         let _ = reader
                             .read_line(&mut line)
                             .map_err(|e| Error::with_cause(ReadFailed, e));
-                        
-                        let write_vec: Vec<_> = line.split_whitespace().collect();
+
+                        let write_vec: Vec<_> =
+                            line.split_whitespace().collect();
                         if write_vec.len() > 2 {
                             if write_vec[1] == "Write" {
-                                let bytes_write = write_vec[2].parse::<u64>()
-                                    .map_err(|e| Error::with_cause(ParseError, e));
+                                let bytes_write =
+                                    write_vec[2].parse::<u64>().map_err(|e| {
+                                        Error::with_cause(ParseError, e)
+                                    });
 
                                 // Return read, write
-                                bytes_read.and_then(|r| bytes_write.and_then(|w| Ok((r,w))))
+                                bytes_read.and_then(|r| {
+                                    bytes_write.and_then(|w| Ok((r, w)))
+                                })
                             } else {
                                 Err(Error::new(BlkioParseError))
                             }
@@ -79,7 +85,6 @@ impl Io {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

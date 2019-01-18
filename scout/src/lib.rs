@@ -7,29 +7,29 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 
-
 mod error;
 mod monitor;
+mod net;
 mod stats;
 mod sysconf;
 mod util;
-mod net;
 
+use caps::{CapSet, Capability};
 use kompact::default_components::DeadletterBox;
 pub use kompact::prelude::*;
 pub use lazy_static::*;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
-use caps::{CapSet, Capability};
 
-use crate::net::interface::*;
-use crate::error::*;
 use crate::error::ErrorKind::*;
+use crate::error::*;
+use crate::net::*;
 
 const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
 const SCOUT_HOST: &str = "127.0.0.1";
 const SCOUT_PORT: u16 = 2000;
+const DEFAULT_INTERFACE: &str = "eth0";
 
 pub struct Scout {
     cgroups_path: String,
@@ -46,13 +46,14 @@ impl Scout {
 
         if !Scout::is_net_admin() {
             Err(Error::new(NetAdminError))
+        } else if !net::tc_exists() {
+            Err(Error::new(TcNotFound))
         } else {
             Ok(Scout {
                 cgroups_path: path,
                 system: Scout::system_setup(),
             })
         }
-
     }
 
     fn check_cgroups(path: String) -> std::io::Result<()> {
@@ -92,12 +93,19 @@ impl Scout {
             "Starting Scout at {}:{}", SCOUT_HOST, SCOUT_PORT
         );
 
-
         let monitor_path = self.cgroups_path.clone();
         let monitor = self.system.create_and_register(move || {
-            let interface = find_interface("eth0");
-            //monitor::Monitor::new(monitor_path, interface.and_then(|i| Some(String::from("eth0"))))
-            monitor::Monitor::new(monitor_path, Some(String::from("eth0")))
+            let interface = if net::find_interface(DEFAULT_INTERFACE) {
+                Some(String::from(DEFAULT_INTERFACE))
+            } else {
+                None // might be that eth0 has not "spawned" yet
+            };
+
+            monitor::Monitor::new(
+                monitor_path,
+                interface,
+                None, // Use default timeout
+            )
         });
 
         self.system.start(&monitor);
