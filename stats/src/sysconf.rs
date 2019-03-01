@@ -1,6 +1,4 @@
-extern crate libc;
-
-use self::libc::c_int;
+use libc::c_int;
 use crate::error::ErrorKind::*;
 use crate::error::*;
 

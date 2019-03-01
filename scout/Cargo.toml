@@ -7,8 +7,9 @@ edition = "2018"
 [dependencies]
 kompact = { git = "https://github.com/kompics/kompact", branch = "master", features = ["protobuf"]}
 bytes = "0.4"
+stats = { path = "../stats" }
 slog = {version = "2.2"}
+oci = {path="../oci"}
 libc = "0.2"
-lazy_static = "1.2.0"
 iptables = "0.2"
 caps = "0.2.0"

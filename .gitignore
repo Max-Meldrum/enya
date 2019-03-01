@@ -4,3 +4,5 @@ railcar
 rootfs
 enya
 .gitignore
+.swp
+.*.rs.swp

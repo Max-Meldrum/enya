@@ -1,5 +1,4 @@
 use crate::util;
-use std::cell::Cell;
 
 const MEMORY_USAGE: &str = "memory/memory.usage_in_bytes";
 const MEMORY_LIMIT: &str = "memory/memory.limit_in_bytes";
@@ -22,45 +21,48 @@ pub enum MemoryStatus {
 #[derive(Debug)]
 pub struct Memory {
     cgroups_path: String,
-    pub usage: Cell<u64>,
-    pub limit: Cell<u64>,
-    pub procentage: Cell<f32>,
+    usage_path: String,
+    limit_path: String,
+    pub usage: u64,
+    pub limit: u64,
+    pub procentage: f32,
 }
 
 impl Memory {
     pub fn new(path: String) -> Memory {
+        let up = path.to_owned() + MEMORY_USAGE;
+        let lp = path.to_owned() + MEMORY_LIMIT;
         Memory {
             cgroups_path: path,
-            usage: Cell::new(0),
-            limit: Cell::new(0),
-            procentage: Cell::new(0.0),
+            usage_path: up,
+            limit_path: lp,
+            usage: 0,
+            limit: 0,
+            procentage: 0.0,
         }
     }
     pub fn update(&mut self) -> MemoryStatus {
-        let usage_path = &(self.cgroups_path.to_owned() + MEMORY_USAGE);
-        let usage = util::read_u64_from(usage_path);
-        let bad_res = 0;
-        self.usage.set(usage.unwrap_or(bad_res));
+        let usage = util::read_u64_from(&self.usage_path);
+        self.usage = usage.unwrap_or(0);
 
         // Perhaps just read it once at start?
         // However, might change if container updates the limit
-        let limit_path = &(self.cgroups_path.to_owned() + MEMORY_LIMIT);
-        let limit = util::read_u64_from(limit_path);
-        self.limit.set(limit.unwrap_or(bad_res));
+        let limit = util::read_u64_from(&self.limit_path);
+        self.limit = limit.unwrap_or(0);
 
         let mut mem_percent: f32 = 0.0;
 
-        if self.limit.get() != 0 {
-            let avg = self.usage.get() as f32 / self.limit.get() as f32 * 100.0;
+        if self.limit != 0 {
+            let avg = self.usage as f32 / self.limit as f32 * 100.0;
             let f = format!("{:.2}", avg).parse::<f32>();
             if let Ok(v) = f {
                 mem_percent = v;
             }
         }
 
-        self.procentage.set(mem_percent);
+        self.procentage = mem_percent;
 
-        let level = (self.procentage.get()) as u16;
+        let level = self.procentage as u16;
 
         if level <= LOW {
             MemoryStatus::Low

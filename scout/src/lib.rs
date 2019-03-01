@@ -4,23 +4,20 @@ extern crate kompact;
 #[macro_use]
 extern crate slog;
 
-#[macro_use]
-extern crate lazy_static;
+extern crate stats;
 
 mod error;
 mod monitor;
 mod net;
-mod stats;
-mod sysconf;
 mod util;
 
 use caps::{CapSet, Capability};
 use kompact::default_components::DeadletterBox;
 pub use kompact::prelude::*;
-pub use lazy_static::*;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
+use oci::Spec;
 
 use crate::error::ErrorKind::*;
 use crate::error::*;
@@ -32,28 +29,36 @@ const SCOUT_PORT: u16 = 2000;
 const DEFAULT_INTERFACE: &str = "eth0";
 
 pub struct Scout {
+    linux_spec: Spec,
     cgroups_path: String,
     system: KompicsSystem,
 }
 
 impl Scout {
     #[cfg(target_os = "linux")]
-    pub fn new(cgroups_path: Option<String>) -> Result<Scout> {
+    pub fn new(spec: Spec) -> Result<Scout> {
+        println!("{:?}", spec.clone().linux.unwrap().resources.unwrap());
+        
+        let cgroups_path = None;
         let path = cgroups_path.unwrap_or_else(|| String::from(CGROUPS_PATH));
 
         let _ = Scout::check_cgroups(path.clone())
             .map_err(|e| Error::with_cause(CgroupsReadError, e));
 
+        Ok(Scout {
+            linux_spec: spec,
+            cgroups_path: path,
+            system: Scout::system_setup(),
+        })
+
+        /*
         if !Scout::is_net_admin() {
             Err(Error::new(NetAdminError))
         } else if !net::tc_exists() {
             Err(Error::new(TcNotFound))
         } else {
-            Ok(Scout {
-                cgroups_path: path,
-                system: Scout::system_setup(),
-            })
         }
+        */
     }
 
     fn check_cgroups(path: String) -> std::io::Result<()> {

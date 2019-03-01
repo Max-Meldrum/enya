@@ -1,8 +1,8 @@
 // Linux Traffic Control Bindings
 
+// Classful QDISCS
 pub enum Qdisc {
-    Prio,
-    Htb,
+    Prio, // PRIO qdisc with class 1,2 and 3
 }
 
 pub struct Tc {}
@@ -15,7 +15,6 @@ impl Tc {
     pub fn create_qdisc(qdisc: Qdisc) {
         match qdisc {
             Qdisc::Prio => (),
-            Qdisc::Htb => (),
         }
     }
 

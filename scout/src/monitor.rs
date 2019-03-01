@@ -24,6 +24,7 @@ pub struct Monitor {
     cpu: Cpu,
     network: Option<Network>,
     io: Option<Io>,
+    process: Option<ActorPath>,
 }
 
 impl Monitor {
@@ -41,14 +42,15 @@ impl Monitor {
             cpu: Cpu::new(path.clone()),
             network: interface.and_then(|i| Some(Network::new(i))),
             io: Some(Io::new(path)),
+            process: None,
         }
     }
 
     fn update(&mut self) {
         let _ = self.memory.update();
         self.cpu.update();
-        debug!(self.ctx.log(), "Memory: {}%", self.memory.procentage.get());
-        debug!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage.get());
+        debug!(self.ctx.log(), "Memory: {}%", self.memory.procentage);
+        debug!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage);
 
         if let Some(net) = self.network.as_mut() {
             net.update();

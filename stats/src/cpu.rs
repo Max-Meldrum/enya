@@ -1,5 +1,4 @@
 use crate::util;
-use std::cell::Cell;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -20,30 +19,35 @@ const NANO_PER_SEC: u64 = 1_000_000_000;
 #[derive(Debug)]
 pub struct Cpu {
     cgroups_path: String,
-    total_usage: Cell<u64>,
-    system_usage: Cell<u64>,
-    pub percentage: Cell<f64>,
+    total_usage_path: String,
+    per_cpu_path: String,
+    total_usage: u64,
+    system_usage: u64,
+    pub percentage: f64,
 }
 
 impl Cpu {
     pub fn new(path: String) -> Cpu {
+        let total_usage_path = path.to_owned() + CPUACCT_USAGE;
+        let per_cpu_path = path.to_owned() + CPUACCT_USAGE_PERCPU;
         Cpu {
             cgroups_path: path,
-            total_usage: Cell::new(0),
-            system_usage: Cell::new(0),
-            percentage: Cell::new(0.0),
+            total_usage_path,
+            per_cpu_path,
+            total_usage: 0,
+            system_usage: 0,
+            percentage: 0.0,
         }
     }
     pub fn update(&mut self) {
-        let total_usage_path = &(self.cgroups_path.to_owned() + CPUACCT_USAGE);
-        let total_usage = util::read_u64_from(total_usage_path);
+        let total_usage = util::read_u64_from(&self.total_usage_path);
 
         if let Ok(usage) = total_usage {
             let mut cpu_percent = 0.0;
 
             if let Ok(sys) = self.get_system_cpu_usage() {
-                let cpu_delta = usage as f64 - self.total_usage.get() as f64;
-                let system_delta = sys as f64 - self.system_usage.get() as f64;
+                let cpu_delta = usage as f64 - self.total_usage as f64;
+                let system_delta = sys as f64 - self.system_usage as f64;
 
                 if cpu_delta > 0.0 && system_delta > 0.0 {
                     let per_cpu_len = match self.get_per_cpu_usage() {
@@ -57,9 +61,9 @@ impl Cpu {
                         cpu_percent = res;
                     }
                 }
-                self.percentage.set(cpu_percent);
-                self.total_usage.set(usage);
-                self.system_usage.set(sys);
+                self.percentage = cpu_percent;
+                self.total_usage = usage;
+                self.system_usage = sys;
             }
         }
     }
@@ -104,8 +108,7 @@ impl Cpu {
     }
 
     fn get_per_cpu_usage(&self) -> Result<Vec<u64>> {
-        let path = &(self.cgroups_path.to_owned() + CPUACCT_USAGE_PERCPU);
-        let line = util::read_string_from(path)?;
+        let line = util::read_string_from(&self.per_cpu_path)?;
         line.split_whitespace()
             .map(|x| {
                 x.parse::<u64>()

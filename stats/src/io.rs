@@ -1,5 +1,3 @@
-use crate::util;
-use std::cell::Cell;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -12,24 +10,24 @@ const BLKIO_SERVICE_BYTES: &str = "blkio/blkio.io_service_bytes";
 #[derive(Debug)]
 pub struct Io {
     cgroups_path: String,
-    pub write: Cell<u64>,
-    pub read: Cell<u64>,
+    pub write: u64,
+    pub read: u64,
 }
 
 impl Io {
     pub fn new(cgroups_path: String) -> Io {
         Io {
             cgroups_path,
-            write: Cell::new(0),
-            read: Cell::new(0),
+            write: 0,
+            read: 0,
         }
     }
 
-    pub fn update(&self) {
+    pub fn update(&mut self) {
         let path = &(self.cgroups_path.to_owned() + BLKIO_SERVICE_BYTES);
         if let Ok((read, write)) = Io::parse_blkio_stat(path) {
-            self.read.set(read);
-            self.write.set(write);
+            self.read = read;
+            self.write = write;
         }
     }
 
@@ -93,9 +91,9 @@ mod tests {
 
     #[test]
     fn blkio_test() {
-        let io = Io::new(CGROUPS_PATH.to_string());
-        let res = Io::update(&io);
-        assert!(io.read.get() > 0);
-        assert!(io.write.get() > 0);
+        let mut io = Io::new(CGROUPS_PATH.to_string());
+        let _ = Io::update(&mut io);
+        assert!(io.read > 0);
+        assert!(io.write > 0);
     }
 }
