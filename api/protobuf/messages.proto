@@ -3,13 +3,31 @@ syntax = "proto3";
 message Subscribe {}
 
 message Network {
-    int64 tx_bytes = 1;
-    int64 tx_packets = 2;
-    int64 rx_bytes = 3;
-    int64 rx_packets = 4;
+  uint64 tx_bytes = 1;
+  uint64 tx_packets = 2;
+  uint64 rx_bytes = 3;
+  uint64 rx_packets = 4;
 }
 
-message IO {
-    int64 read = 1;
-    int64 write = 2;
+message Io {
+  uint64 read = 1;
+  uint64 write = 2;
+}
+
+message Memory {
+  uint64 usage = 1;
+  uint64 limit = 2;
+}
+
+message Cpu {
+  uint64 total = 1;
+  uint64 system = 2;
+}
+
+message MetricReport {
+  string id = 1;
+  Memory memory = 2;
+  Cpu cpu = 3;
+  Network network = 4;
+  Io io = 5;
 }

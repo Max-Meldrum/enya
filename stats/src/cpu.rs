@@ -21,8 +21,8 @@ pub struct Cpu {
     cgroups_path: String,
     total_usage_path: String,
     per_cpu_path: String,
-    total_usage: u64,
-    system_usage: u64,
+    pub total_usage: u64,
+    pub system_usage: u64,
     pub percentage: f64,
 }
 

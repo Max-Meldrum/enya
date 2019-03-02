@@ -9,6 +9,7 @@ kompact = { git = "https://github.com/kompics/kompact", branch = "master", featu
 bytes = "0.4"
 stats = { path = "../stats" }
 net = { path = "../net" }
+api = { path = "../api" }
 slog = {version = "2.2"}
 oci = {path="../oci"}
 caps = "0.2.0"

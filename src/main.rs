@@ -23,7 +23,7 @@ extern crate scopeguard;
 extern crate oci;
 extern crate seccomp_sys;
 
-extern crate scout;
+extern crate system;
 
 mod capabilities;
 mod cgroups;
@@ -64,7 +64,7 @@ use std::os::unix::fs::symlink;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::result::Result as StdResult;
 use sync::Cond;
-use scout::Scout;
+use system::*;
 
 lazy_static! {
     static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
@@ -566,11 +566,11 @@ fn load_console_sockets() -> Result<(RawFd, RawFd)> {
 }
 
 fn finish_create(id: &str, dir: &str, matches: &ArgMatches) -> Result<()> {
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let rootfs = canonicalize(&spec.root.path)
-        .chain_err(|| format!{"failed to find root path {}", &spec.root.path})?
+        .chain_err(|| format! {"failed to find root path {}", &spec.root.path})?
         .to_string_lossy()
         .into_owned();
 
@@ -696,8 +696,8 @@ fn cmd_start(id: &str, state_dir: &str) -> Result<()> {
     let dir = instance_dir(id, state_dir);
     chdir(&*dir).chain_err(|| format!("instance {} doesn't exist", id))?;
 
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let init_pid = get_init_pid()?;
 
@@ -732,7 +732,7 @@ fn cmd_start(id: &str, state_dir: &str) -> Result<()> {
         }
         let linux = spec.linux.as_ref().unwrap();
         let cpath = if linux.cgroups_path == "" {
-            format!{"/{}", id}
+            format! {"/{}", id}
         } else {
             linux.cgroups_path.clone()
         };
@@ -903,7 +903,7 @@ fn cmd_delete(id: &str, state_dir: &str, matches: &ArgMatches) -> Result<()> {
     if let Ok(spec) = Spec::load(CONFIG) {
         let linux = spec.linux.as_ref().unwrap();
         let cpath = if linux.cgroups_path == "" {
-            format!{"/{}", id}
+            format! {"/{}", id}
         } else {
             linux.cgroups_path.clone()
         };
@@ -939,8 +939,8 @@ fn cmd_delete(id: &str, state_dir: &str, matches: &ArgMatches) -> Result<()> {
 fn cmd_run(id: &str, matches: &ArgMatches) -> Result<()> {
     let bundle = matches.value_of("bundle").unwrap();
     chdir(&*bundle).chain_err(|| format!("failed to chdir to {}", bundle))?;
-    let spec =
-        Spec::load(CONFIG).chain_err(|| format!("failed to load {}", CONFIG))?;
+    let spec = Spec::load(CONFIG)
+        .chain_err(|| format!("failed to load {}", CONFIG))?;
 
     let child_pid = safe_run_container(
         id,
@@ -1005,12 +1005,12 @@ fn execute_hook(hook: &oci::Hook, state: &oci::State) -> Result<()> {
             }
             // a timeout will cause a failure and child will be killed on exit
             if let Some(sig) = wait_for_pipe_sig(rfd, timeout)? {
-                let msg = format!{"hook exited with signal: {:?}", sig};
+                let msg = format! {"hook exited with signal: {:?}", sig};
                 return Err(ErrorKind::InvalidHook(msg).into());
             }
             let (exit_code, _) = wait_for_child(child)?;
             if exit_code != 0 {
-                let msg = format!{"hook exited with exit code: {}", exit_code};
+                let msg = format! {"hook exited with exit code: {}", exit_code};
                 return Err(ErrorKind::InvalidHook(msg).into());
             }
         }
@@ -1107,7 +1107,7 @@ fn run_container(
     }
 
     let cpath = if linux.cgroups_path == "" {
-        format!{"/{}", id}
+        format! {"/{}", id}
     } else {
         linux.cgroups_path.clone()
     };
@@ -1144,7 +1144,8 @@ fn run_container(
             mount_fd = fd;
             continue;
         }
-        setns(fd, space).chain_err(|| format!("failed to enter {:?}", space))?;
+        setns(fd, space)
+            .chain_err(|| format!("failed to enter {:?}", space))?;
         close(fd)?;
         if space == CloneFlags::CLONE_NEWUSER {
             setid(Uid::from_raw(0), Gid::from_raw(0))
@@ -1191,7 +1192,8 @@ fn run_container(
     }
 
     if cf.contains(CloneFlags::CLONE_NEWNS) {
-        mounts::pivot_rootfs(&*rootfs).chain_err(|| "failed to pivot rootfs")?;
+        mounts::pivot_rootfs(&*rootfs)
+            .chain_err(|| "failed to pivot rootfs")?;
 
         // only set sysctls in newns
         for (key, value) in &linux.sysctl {
@@ -1293,9 +1295,9 @@ fn run_container(
 
     if init {
         if init_only && tsocketfd == -1 {
-            scout(wfd, daemonize)?;
+            scout(spec, wfd, daemonize)?;
         } else {
-            fork_final_child(wfd, tsocketfd, daemonize)?;
+            fork_final_child(spec, wfd, tsocketfd, daemonize)?;
         }
     }
 
@@ -1369,11 +1371,13 @@ fn fork_first(
                 write_mappings(
                     &format!("/proc/{}/uid_map", child),
                     &linux.uid_mappings,
-                ).chain_err(|| "failed to write uid mappings")?;
+                )
+                .chain_err(|| "failed to write uid mappings")?;
                 write_mappings(
                     &format!("/proc/{}/gid_map", child),
                     &linux.gid_mappings,
-                ).chain_err(|| "failed to write gid mappings")?;
+                )
+                .chain_err(|| "failed to write gid mappings")?;
             }
             // setup cgroups
             let schild = child.to_string();
@@ -1461,7 +1465,7 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     Ok(())
 }
 
-fn fork_final_child(wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
+fn fork_final_child(spec: &Spec, wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
     // fork again so child becomes pid 2
     match fork()? {
         ForkResult::Child => {
@@ -1472,19 +1476,24 @@ fn fork_final_child(wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
-            scout(wfd, daemonize)?;
+            scout(spec, wfd, daemonize)?;
             Ok(())
         }
     }
 }
 
-fn scout(wfd: RawFd, daemonize: bool) -> Result<()> {
+fn scout(spec: &Spec, wfd: RawFd, daemonize: bool) -> Result<()> {
     if daemonize {
         close(wfd).chain_err(|| "could not close wfd")?;
     }
 
-    let scout = Scout::new(None);
-    scout.start();
+    match System::new(spec.clone()) {
+        Ok(system) => system.start(),
+        Err(e) => {
+            error!("{:?}", e);
+            std::process::exit(-1)
+        }
+    }
 
     let s = SigSet::all();
     s.thread_block()?;
@@ -1519,9 +1528,7 @@ fn scout(wfd: RawFd, daemonize: bool) -> Result<()> {
             warn!("failed to signal children, {}", e);
         }
     }
-
 }
-
 
 fn do_exec(path: &str, args: &[String], env: &[String]) -> Result<()> {
     let p = CString::new(path.to_string()).unwrap();
@@ -1559,7 +1566,7 @@ fn write_mappings(path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
 }
 
 fn set_sysctl(key: &str, value: &str) -> Result<()> {
-    let path = format!{"/proc/sys/{}", key.replace(".", "/")};
+    let path = format! {"/proc/sys/{}", key.replace(".", "/")};
     let fd = match open(&*path, OFlag::O_RDWR, Mode::empty()) {
         Err(::nix::Error::Sys(errno)) => {
             if errno != Errno::ENOENT {
@@ -1666,7 +1673,7 @@ fn wait_for_pipe_zero(rfd: RawFd, timeout: i32) -> Result<()> {
         return Err(ErrorKind::PipeClosed(msg).into());
     }
     if result[0] != 0 {
-        let msg = format!{"got {} from pipe instead of 0", result[0]};
+        let msg = format! {"got {} from pipe instead of 0", result[0]};
         return Err(ErrorKind::InvalidValue(msg).into());
     }
     Ok(())
@@ -1777,8 +1784,8 @@ fn set_name(name: &str) -> Result<()> {
         Ok(_) => (),
     };
     unsafe {
-        let init =
-            std::ffi::CString::new(name).chain_err(|| "invalid process name")?;
+        let init = std::ffi::CString::new(name)
+            .chain_err(|| "invalid process name")?;
         let len = std::ffi::CStr::from_ptr(*ARGV).to_bytes().len();
         // after fork, ARGV points to the thread's local
         // copy of arg0.

@@ -3,6 +3,7 @@ extern crate bytes;
 #[macro_use]
 extern crate slog;
 extern crate caps;
+extern crate api;
 
 mod monitor;
 mod error;
