@@ -3,11 +3,11 @@ extern crate libc;
 extern crate lazy_static;
 
 mod error;
-mod util;
 mod sysconf;
+mod util;
 
 // Public interface
-pub mod io;
 pub mod cpu;
+pub mod io;
 pub mod memory;
 pub mod network;

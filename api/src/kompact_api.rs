@@ -1,9 +1,9 @@
 extern crate bytes;
 extern crate kompact;
 
+pub use crate::messages::messages::MetricReport;
 use kompact::prelude::BufMut;
 use kompact::*;
-pub use crate::messages::messages::MetricReport;
 use protobuf::Message;
 
 impl Serialisable for MetricReport {
@@ -18,7 +18,8 @@ impl Serialisable for MetricReport {
         }
     }
     fn serialise(&self, buf: &mut BufMut) -> Result<(), SerError> {
-        let bytes = self.write_to_bytes()
+        let bytes = self
+            .write_to_bytes()
             .map_err(|err| SerError::InvalidData(err.to_string()))?;
         buf.put_slice(&bytes);
         Ok(())

@@ -17,7 +17,7 @@ fn main() {
             let mut f = File::open("libseccomp/config.log").unwrap();
             let mut result = String::new();
             f.read_to_string(&mut result).unwrap();
-            println!{"{}", &result};
+            println! {"{}", &result};
             std::process::exit(1);
         }
 

@@ -1,11 +1,11 @@
-use bytes::Buf;
-use kompact::*;
-use kompact::prelude::BufMut;
-use std::time::Duration;
 use api::protobuf::Message;
+use bytes::Buf;
+use kompact::prelude::BufMut;
+use kompact::*;
+use std::time::Duration;
 
-use api::messages::Subscribe;
 use api::kompact_api::*;
+use api::messages::Subscribe;
 
 use stats::cpu::Cpu;
 use stats::io::*;
@@ -81,7 +81,9 @@ impl Serialisable for Box<Report> {
         }
     }
     fn serialise(&self, buf: &mut BufMut) -> Result<(), SerError> {
-        let bytes = self.0.write_to_bytes()
+        let bytes = self
+            .0
+            .write_to_bytes()
             .map_err(|err| SerError::InvalidData(err.to_string()))?;
         buf.put_slice(&bytes);
         Ok(())
@@ -164,7 +166,7 @@ impl Monitor {
 impl Provide<ControlPort> for Monitor {
     fn handle(&mut self, event: ControlEvent) {
         match event {
-            ControlEvent::Start =>  {
+            ControlEvent::Start => {
                 let timeout = Duration::from_millis(self.timeout_ms);
                 let timer =
                     self.schedule_periodic(timeout, timeout, |self_c, _| {
@@ -172,13 +174,9 @@ impl Provide<ControlPort> for Monitor {
                     });
 
                 self.collect_timer = Some(timer);
-            },
-            ControlEvent::Stop => {
-                self.stop_collect()
-            },
-            ControlEvent::Kill => {
-                self.stop_collect()
-            },
+            }
+            ControlEvent::Stop => self.stop_collect(),
+            ControlEvent::Kill => self.stop_collect(),
         }
     }
 }

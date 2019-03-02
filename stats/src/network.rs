@@ -35,7 +35,7 @@ impl Network {
             interface: iface,
             tx_bytes_path: tx_b,
             tx_packets_path: tx_p,
-            rx_bytes_path: rx_b,    
+            rx_bytes_path: rx_b,
             rx_packets_path: rx_p,
             rx_bytes: 0,
             rx_packets: 0,
@@ -45,17 +45,15 @@ impl Network {
     }
 
     pub fn update(&mut self) {
-        self.tx_bytes = util::read_u64_from(&self.tx_bytes_path)
-            .unwrap_or(0);
+        self.tx_bytes = util::read_u64_from(&self.tx_bytes_path).unwrap_or(0);
 
-        self.tx_packets = util::read_u64_from(&self.tx_packets_path)
-            .unwrap_or(0);
+        self.tx_packets =
+            util::read_u64_from(&self.tx_packets_path).unwrap_or(0);
 
-        self.rx_bytes = util::read_u64_from(&self.rx_bytes_path)
-            .unwrap_or(0);
+        self.rx_bytes = util::read_u64_from(&self.rx_bytes_path).unwrap_or(0);
 
-        self.rx_packets = util::read_u64_from(&self.rx_packets_path)
-            .unwrap_or(0);
+        self.rx_packets =
+            util::read_u64_from(&self.rx_packets_path).unwrap_or(0);
     }
 }
 

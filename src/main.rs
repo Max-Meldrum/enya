@@ -1465,7 +1465,12 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     Ok(())
 }
 
-fn fork_final_child(spec: &Spec, wfd: RawFd, tfd: RawFd, daemonize: bool) -> Result<()> {
+fn fork_final_child(
+    spec: &Spec,
+    wfd: RawFd,
+    tfd: RawFd,
+    daemonize: bool,
+) -> Result<()> {
     // fork again so child becomes pid 2
     match fork()? {
         ForkResult::Child => {

@@ -1,6 +1,6 @@
-use libc::c_int;
 use crate::error::ErrorKind::*;
 use crate::error::*;
+use libc::c_int;
 
 #[cfg(target_os = "linux")]
 pub fn clock_ticks() -> Result<u64> {

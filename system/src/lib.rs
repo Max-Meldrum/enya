@@ -1,23 +1,23 @@
-extern crate kompact;
 extern crate bytes;
+extern crate kompact;
 #[macro_use]
 extern crate slog;
-extern crate caps;
 extern crate api;
+extern crate caps;
 
-mod monitor;
 mod error;
+mod monitor;
 
 use caps::{CapSet, Capability};
 use kompact::default_components::DeadletterBox;
 use kompact::prelude::*;
+use oci::Spec;
 use std::fs::File;
 use std::net::SocketAddr;
 use std::net::{IpAddr, Ipv4Addr};
-use oci::Spec;
 
-use crate::error::*;
 use crate::error::ErrorKind::*;
+use crate::error::*;
 
 const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
 const SYSTEM_HOST: &str = "127.0.0.1";
@@ -34,7 +34,7 @@ impl System {
     #[cfg(target_os = "linux")]
     pub fn new(spec: Spec) -> Result<System> {
         println!("{:?}", spec.clone().linux.unwrap().resources.unwrap());
-        
+
         let cgroups_path = None;
         let path = cgroups_path.unwrap_or_else(|| String::from(CGROUPS_PATH));
 
