@@ -1,9 +1,8 @@
+extern crate libc;
+
 pub mod tc;
-pub mod tower;
 
 use std::process::Command;
-
-use libc;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::c_char;

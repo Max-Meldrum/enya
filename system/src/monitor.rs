@@ -4,10 +4,10 @@ use kompact::Timer;
 use kompact::*;
 use std::time::Duration;
 
-use crate::stats::cpu::Cpu;
-use crate::stats::io::*;
-use crate::stats::memory::*;
-use crate::stats::network::*;
+use stats::cpu::Cpu;
+use stats::io::*;
+use stats::memory::*;
+use stats::network::*;
 
 const DEFAULT_TIMEOUT_MS: u64 = 2000;
 
@@ -24,7 +24,7 @@ pub struct Monitor {
     cpu: Cpu,
     network: Option<Network>,
     io: Option<Io>,
-    process: Option<ActorPath>,
+    subscribers: Vec<ActorPath>,
 }
 
 impl Monitor {
@@ -42,7 +42,7 @@ impl Monitor {
             cpu: Cpu::new(path.clone()),
             network: interface.and_then(|i| Some(Network::new(i))),
             io: Some(Io::new(path)),
-            process: None,
+            subscribers: Vec::new(),
         }
     }
 
@@ -73,14 +73,22 @@ impl Monitor {
 
 impl Provide<ControlPort> for Monitor {
     fn handle(&mut self, event: ControlEvent) {
-        if let ControlEvent::Start = event {
-            let timeout = Duration::from_millis(self.timeout_ms);
-            let timer =
-                self.schedule_periodic(timeout, timeout, |self_c, _| {
-                    self_c.actor_ref().tell(Box::new(Collect {}), self_c);
-                });
+        match event {
+            ControlEvent::Start =>  {
+                let timeout = Duration::from_millis(self.timeout_ms);
+                let timer =
+                    self.schedule_periodic(timeout, timeout, |self_c, _| {
+                        self_c.actor_ref().tell(Box::new(Collect {}), self_c);
+                    });
 
-            self.collect_timer = Some(timer);
+                self.collect_timer = Some(timer);
+            },
+            ControlEvent::Stop => {
+                self.stop_collect()
+            },
+            ControlEvent::Kill => {
+                self.stop_collect()
+            },
         }
     }
 }
@@ -97,6 +105,9 @@ impl Actor for Monitor {
         _ser_id: u64,
         _buf: &mut Buf,
     ) {
+
+        // Subscription
+        // Add sender to subscribers
         error!(self.ctx.log(), "Got unexpected message from {}", sender);
     }
 }
