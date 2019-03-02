@@ -5,7 +5,6 @@ use kompact::*;
 use std::time::Duration;
 
 use api::kompact_api::*;
-use api::messages::Subscribe;
 
 use stats::cpu::Cpu;
 use stats::io::*;
@@ -19,11 +18,46 @@ struct Collect {}
 
 pub struct ProtoSer;
 
-impl Deserialiser<Subscribe> for ProtoSer {
-    fn deserialise(buf: &mut Buf) -> Result<Subscribe, SerError> {
+impl Deserialiser<api::Subscribe> for ProtoSer {
+    fn deserialise(buf: &mut Buf) -> Result<api::Subscribe, SerError> {
         let parsed = api::protobuf::parse_from_bytes(buf.bytes())
             .map_err(|err| SerError::InvalidData(err.to_string()))?;
         Ok(parsed)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Subscribe(pub api::Subscribe);
+
+impl Subscribe {
+    pub fn new() -> Subscribe {
+        Subscribe {
+            0: api::Subscribe::new(),
+        }
+    }
+}
+
+impl Serialisable for Box<Subscribe> {
+    fn serid(&self) -> u64 {
+        serialisation_ids::PBUF
+    }
+    fn size_hint(&self) -> Option<usize> {
+        if let Ok(bytes) = self.0.write_to_bytes() {
+            Some(bytes.len())
+        } else {
+            None
+        }
+    }
+    fn serialise(&self, buf: &mut BufMut) -> Result<(), SerError> {
+        let bytes = self
+            .0
+            .write_to_bytes()
+            .map_err(|err| SerError::InvalidData(err.to_string()))?;
+        buf.put_slice(&bytes);
+        Ok(())
+    }
+    fn local(self: Box<Self>) -> Result<Box<Any + Send>, Box<Serialisable>> {
+        Ok(self)
     }
 }
 
@@ -69,6 +103,13 @@ impl Report {
     }
 }
 
+impl Deserialiser<api::MetricReport> for ProtoSer {
+    fn deserialise(buf: &mut Buf) -> Result<api::MetricReport, SerError> {
+        let parsed = api::protobuf::parse_from_bytes(buf.bytes())
+            .map_err(|err| SerError::InvalidData(err.to_string()))?;
+        Ok(parsed)
+    }
+}
 impl Serialisable for Box<Report> {
     fn serid(&self) -> u64 {
         serialisation_ids::PBUF
@@ -193,12 +234,126 @@ impl Actor for Monitor {
         _ser_id: u64,
         buf: &mut Buf,
     ) {
-        let result: Result<Subscribe, SerError> = ProtoSer::deserialise(buf);
+        let result: Result<api::Subscribe, SerError> = ProtoSer::deserialise(buf);
 
         if let Ok(res) = result {
+            debug!(self.ctx.log(), "Adding subscriber {}", sender);
             self.subscribers.push(sender);
         } else {
             error!(self.ctx.log(), "Got unexpected message from {}", sender);
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kompact::default_components::DeadletterBox;
+    use std::net::SocketAddr;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    const SYSTEM_HOST: &str = "127.0.0.1";
+    const SYSTEM_PORT: u16 = 2000;
+
+    #[derive(ComponentDefinition)]
+    pub struct Subscriber {
+        ctx: ComponentContext<Subscriber>,
+        target: ActorPath,
+        pub reports_received: u64,
+    }
+
+    impl Subscriber {
+        pub fn new(path: ActorPath) -> Subscriber {
+            Subscriber {
+                ctx: ComponentContext::new(),
+                target: path,
+                reports_received: 0,
+            }
+        }
+    }
+
+    impl Actor for Subscriber {
+        fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {
+        }
+        fn receive_message(&mut self, sender: ActorPath, _ser_id: u64, buf: &mut Buf) {
+            let result: Result<api::MetricReport, SerError> = ProtoSer::deserialise(buf);
+            if let Ok(report) = result {
+                self.reports_received += 1;
+            } else {
+                error!(self.ctx.log(), "Got unexpected message from {}", sender);
+            }
+        }
+    }
+
+    impl Provide<ControlPort> for Subscriber {
+        fn handle(&mut self, event: ControlEvent) {
+            if let ControlEvent::Start = event {
+                let msg = Subscribe::new();
+                self.target.tell(Box::new(msg),self);
+            }
+        }
+    }
+
+    #[test]
+    fn subscription_test() {
+        let ip_addr = SYSTEM_HOST
+            .parse()
+            .unwrap_or_else(|_| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+
+        let socket_addr = SocketAddr::new(ip_addr, SYSTEM_PORT);
+        let mut cfg = KompicsConfig::new();
+
+        cfg.label(String::from("System"));
+
+        cfg.system_components(DeadletterBox::new, move || {
+            let net_config = NetworkConfig::new(socket_addr);
+            NetworkDispatcher::with_config(net_config)
+        });
+
+        let system = KompicsSystem::new(cfg);
+
+        let monitor = system.create_and_register(move || {
+            Monitor::new(
+                String::from("/sys/fs/cgroup"),
+                None,
+                Some(250),
+            )
+        });
+
+        let _ = system
+            .register_by_alias(&monitor, "monitor")
+            .await_timeout(Duration::from_millis(1000))
+            .expect("Registration never completed.");
+
+        system.start(&monitor);
+
+        let sub_system_addr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let sub_addr_socket = SocketAddr::new(sub_system_addr, 1337);
+
+        let mut cfg = KompicsConfig::new();
+        cfg.label(String::from("Subscriber"));
+
+        cfg.system_components(DeadletterBox::new, move || {
+            let net_config = NetworkConfig::new(sub_addr_socket);
+            NetworkDispatcher::with_config(net_config)
+        });
+
+        let sub_system = KompicsSystem::new(cfg);
+
+        let monitor_path = ActorPath::Named(NamedPath::with_socket(
+            Transport::TCP,
+            socket_addr,
+            vec!["monitor".into()],
+        ));
+
+        let subscriber = sub_system.create_and_register(move || {
+            Subscriber::new(monitor_path)
+        });
+
+        sub_system.start(&subscriber);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let sub = subscriber.definition().lock().unwrap();
+        assert!(sub.reports_received >= 1);
+    }
+}
+

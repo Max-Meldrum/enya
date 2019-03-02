@@ -123,6 +123,5 @@ mod tests {
 
     #[test]
     fn system_group() {
-        let system = System::new(None); // Assume default cgroups path
     }
 }
