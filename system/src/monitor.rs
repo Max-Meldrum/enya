@@ -279,6 +279,7 @@ mod tests {
             let result: Result<api::MetricReport, SerError> = ProtoSer::deserialise(buf);
             if let Ok(report) = result {
                 self.reports_received += 1;
+                info!(self.ctx.log(), "MetricReport: {:?}", report);
             } else {
                 error!(self.ctx.log(), "Got unexpected message from {}", sender);
             }
@@ -314,7 +315,7 @@ mod tests {
 
         let monitor = system.create_and_register(move || {
             Monitor::new(
-                String::from("/sys/fs/cgroup"),
+                String::from("/sys/fs/cgroup/"),
                 None,
                 Some(250),
             )
