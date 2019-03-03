@@ -5,6 +5,7 @@ use kompact::*;
 use std::time::Duration;
 
 use api::kompact_api::*;
+use api::kompact_api::ProtoSer;
 
 use stats::cpu::Cpu;
 use stats::io::*;
@@ -15,16 +16,6 @@ const DEFAULT_TIMEOUT_MS: u64 = 2000;
 
 #[derive(Clone, Copy)]
 struct Collect {}
-
-pub struct ProtoSer;
-
-impl Deserialiser<api::Subscribe> for ProtoSer {
-    fn deserialise(buf: &mut Buf) -> Result<api::Subscribe, SerError> {
-        let parsed = api::protobuf::parse_from_bytes(buf.bytes())
-            .map_err(|err| SerError::InvalidData(err.to_string()))?;
-        Ok(parsed)
-    }
-}
 
 #[derive(Clone, Debug)]
 struct Subscribe(pub api::Subscribe);
@@ -103,13 +94,6 @@ impl Report {
     }
 }
 
-impl Deserialiser<api::MetricReport> for ProtoSer {
-    fn deserialise(buf: &mut Buf) -> Result<api::MetricReport, SerError> {
-        let parsed = api::protobuf::parse_from_bytes(buf.bytes())
-            .map_err(|err| SerError::InvalidData(err.to_string()))?;
-        Ok(parsed)
-    }
-}
 impl Serialisable for Box<Report> {
     fn serid(&self) -> u64 {
         serialisation_ids::PBUF

@@ -2,9 +2,21 @@ extern crate bytes;
 extern crate kompact;
 
 pub use crate::messages::messages::MetricReport;
+use crate::messages::messages::Subscribe;
+
 use kompact::prelude::BufMut;
 use kompact::*;
 use protobuf::Message;
+
+pub struct ProtoSer;
+
+impl Deserialiser<Subscribe> for ProtoSer {
+    fn deserialise(buf: &mut Buf) -> Result<Subscribe, SerError> {
+        let parsed = protobuf::parse_from_bytes(buf.bytes())
+            .map_err(|err| SerError::InvalidData(err.to_string()))?;
+        Ok(parsed)
+    }
+}
 
 impl Serialisable for MetricReport {
     fn serid(&self) -> u64 {
@@ -26,5 +38,13 @@ impl Serialisable for MetricReport {
     }
     fn local(self: Box<Self>) -> Result<Box<Any + Send>, Box<Serialisable>> {
         Ok(self)
+    }
+}
+
+impl Deserialiser<MetricReport> for ProtoSer {
+    fn deserialise(buf: &mut Buf) -> Result<MetricReport, SerError> {
+        let parsed = protobuf::parse_from_bytes(buf.bytes())
+            .map_err(|err| SerError::InvalidData(err.to_string()))?;
+        Ok(parsed)
     }
 }
