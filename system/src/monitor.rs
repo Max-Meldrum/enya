@@ -17,107 +17,6 @@ const DEFAULT_TIMEOUT_MS: u64 = 2000;
 #[derive(Clone, Copy)]
 struct Collect {}
 
-#[derive(Clone, Debug)]
-struct Subscribe(pub api::Subscribe);
-
-impl Subscribe {
-    pub fn new() -> Subscribe {
-        Subscribe {
-            0: api::Subscribe::new(),
-        }
-    }
-}
-
-impl Serialisable for Box<Subscribe> {
-    fn serid(&self) -> u64 {
-        serialisation_ids::PBUF
-    }
-    fn size_hint(&self) -> Option<usize> {
-        if let Ok(bytes) = self.0.write_to_bytes() {
-            Some(bytes.len())
-        } else {
-            None
-        }
-    }
-    fn serialise(&self, buf: &mut BufMut) -> Result<(), SerError> {
-        let bytes = self
-            .0
-            .write_to_bytes()
-            .map_err(|err| SerError::InvalidData(err.to_string()))?;
-        buf.put_slice(&bytes);
-        Ok(())
-    }
-    fn local(self: Box<Self>) -> Result<Box<Any + Send>, Box<Serialisable>> {
-        Ok(self)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Report(pub api::MetricReport);
-
-impl Report {
-    pub fn new() -> Report {
-        Report {
-            0: api::MetricReport::new(),
-        }
-    }
-    pub fn set_id(&mut self, id: &str) {
-        self.0.set_id(id.to_string());
-    }
-    pub fn set_memory(&mut self, memory: &Memory) {
-        let mut mem = api::Memory::new();
-        mem.set_usage(memory.usage);
-        mem.set_limit(memory.limit);
-        self.0.set_memory(mem);
-    }
-
-    pub fn set_cpu(&mut self, cpu: &Cpu) {
-        let mut c = api::Cpu::new();
-        c.set_total(cpu.total_usage);
-        c.set_system(cpu.system_usage);
-        self.0.set_cpu(c);
-    }
-
-    pub fn set_network(&mut self, net: &Network) {
-        let mut network = api::Network::new();
-        network.set_tx_bytes(net.tx_bytes);
-        network.set_tx_packets(net.tx_packets);
-        network.set_rx_bytes(net.rx_bytes);
-        network.set_rx_packets(net.rx_packets);
-        self.0.set_network(network);
-    }
-    pub fn set_io(&mut self, io: &Io) {
-        let mut io_obj = api::Io::new();
-        io_obj.set_read(io.read);
-        io_obj.set_write(io.write);
-        self.0.set_io(io_obj);
-    }
-}
-
-impl Serialisable for Box<Report> {
-    fn serid(&self) -> u64 {
-        serialisation_ids::PBUF
-    }
-    fn size_hint(&self) -> Option<usize> {
-        if let Ok(bytes) = self.0.write_to_bytes() {
-            Some(bytes.len())
-        } else {
-            None
-        }
-    }
-    fn serialise(&self, buf: &mut BufMut) -> Result<(), SerError> {
-        let bytes = self
-            .0
-            .write_to_bytes()
-            .map_err(|err| SerError::InvalidData(err.to_string()))?;
-        buf.put_slice(&bytes);
-        Ok(())
-    }
-    fn local(self: Box<Self>) -> Result<Box<Any + Send>, Box<Serialisable>> {
-        Ok(self)
-    }
-}
-
 #[derive(ComponentDefinition)]
 pub struct Monitor {
     ctx: ComponentContext<Monitor>,
@@ -150,33 +49,60 @@ impl Monitor {
         }
     }
 
-    fn update(&mut self) {
-        let mut report = Report::new();
-        report.set_id("process");
+    fn create_report(&mut self) -> api::MetricReport {
+        let mut report = api::MetricReport::new();
+        report.set_id(String::from("process"));
 
+        let mut mem = api::Memory::new();
+        mem.set_usage(self.memory.usage);
+        mem.set_limit(self.memory.limit);
+        report.set_memory(mem);
+
+        let mut cpu = api::Cpu::new();
+        cpu.set_total(self.cpu.total_usage);
+        cpu.set_system(self.cpu.system_usage);
+        report.set_cpu(cpu);
+
+        if let Some(net) = self.network.as_mut() {
+            let mut network = api::Network::new();
+            network.set_tx_bytes(net.tx_bytes);
+            network.set_tx_packets(net.tx_packets);
+            network.set_rx_bytes(net.rx_bytes);
+            network.set_rx_packets(net.rx_packets);
+            report.set_network(network);
+        }
+
+        if let Some(io) = self.io.as_mut() {
+            let mut io_obj = api::Io::new();
+            io_obj.set_read(io.read);
+            io_obj.set_write(io.write);
+            report.set_io(io_obj);
+        }
+
+        report
+    }
+
+    fn update(&mut self) {
         let _ = self.memory.update();
         self.cpu.update();
         debug!(self.ctx.log(), "Memory: {}%", self.memory.procentage);
         debug!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage);
 
-        report.set_memory(&self.memory);
-        report.set_cpu(&self.cpu);
-
         if let Some(net) = self.network.as_mut() {
             net.update();
-            report.set_network(net);
             debug!(self.ctx.log(), "Network: {:?}", net);
         }
 
         if let Some(io) = self.io.as_mut() {
             io.update();
-            report.set_io(io);
             debug!(self.ctx.log(), "IO: {:?}", io);
         }
 
+        let report = self.create_report();
+
         // TODO: improve?
         for sub in self.subscribers.iter() {
-            sub.tell(Box::new(report.clone()), self);
+            sub.tell(report.clone(), self);
         }
     }
 
@@ -273,8 +199,8 @@ mod tests {
     impl Provide<ControlPort> for Subscriber {
         fn handle(&mut self, event: ControlEvent) {
             if let ControlEvent::Start = event {
-                let msg = Subscribe::new();
-                self.target.tell(Box::new(msg),self);
+                let msg = api::Subscribe::new();
+                self.target.tell(msg, self);
             }
         }
     }

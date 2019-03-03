@@ -109,6 +109,11 @@ impl System {
             )
         });
 
+        let _ = self.system
+            .register_by_alias(&monitor, "monitor")
+            .await_timeout(std::time::Duration::from_millis(250))
+            .expect("Failed to register enya monitor");
+
         self.system.start(&monitor);
     }
 
