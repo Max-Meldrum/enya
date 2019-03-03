@@ -145,6 +145,7 @@ const CONFIG: &'static str = "config.json";
 const INIT_PID: &'static str = "init.pid";
 const PROCESS_PID: &'static str = "process.pid";
 const TSOCKETFD: RawFd = 9;
+const ENYA_PROCESS_CGROUP: &'static str = "process";
 
 #[cfg(feature = "nightly")]
 static mut ARGC: isize = 0 as isize;
@@ -1136,6 +1137,12 @@ fn run_container(
         return Ok(child_pid);
     }
 
+    println!("first");
+    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
+    for path in paths {
+        println!("Name: {}", path.unwrap().path().display())
+    }
+
     let mut mount_fd = -1;
     // enter path namespaces
     for &(space, fd) in &to_enter {
@@ -1164,6 +1171,12 @@ fn run_container(
     let chain = || format!("failed to unshare {:?}", cf);
     unshare(cf & !CloneFlags::CLONE_NEWUSER).chain_err(chain)?;
 
+    println!("second");
+    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
+    for path in paths {
+        println!("Name: {}", path.unwrap().path().display())
+    }
+
     if enter_pid {
         fork_enter_pid(init, daemonize)?;
     };
@@ -1171,6 +1184,12 @@ fn run_container(
     if cf.contains(CloneFlags::CLONE_NEWUTS) {
         sethostname(&spec.hostname)?;
     }
+
+    // Set up cgroup for enya process
+    // NOTE: it only creates the cgroups.
+    //       1. No pid is written to cgroup.procs
+    //       2. No resources are specified
+    cgroups::enya_process_setup(&cpath, ENYA_PROCESS_CGROUP)?;
 
     if cf.contains(CloneFlags::CLONE_NEWNS) {
         mounts::init_rootfs(spec, rootfs, &cpath, bind_devices)
@@ -1252,7 +1271,6 @@ fn run_container(
     if !spec.process.cwd.is_empty() {
         chdir(&*spec.process.cwd)?;
     }
-
     debug!("setting ids");
 
     // set uid/gid/groups
@@ -1263,6 +1281,46 @@ fn run_container(
         setgroups(&spec.process.user.additional_gids)?;
     }
 
+    // notify first parent that it can continue
+    debug!("writing zero to pipe to trigger poststart");
+    let data: &[u8] = &[0];
+    write(wfd, data).chain_err(|| "failed to write zero")?;
+
+    // Debug
+    println!("third");
+    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
+    for path in paths {
+        println!("Name: {}", path.unwrap().path().display())
+    }
+
+
+    if init {
+        if init_only && tsocketfd == -1 {
+            system(&cpath, spec, wfd, daemonize)?;
+        } else {
+            fork_final_child(&cpath, spec, wfd, tsocketfd, daemonize)?;
+        }
+    }
+
+    secure_container(spec, linux)?;
+
+    // we nolonger need wfd, so close it
+    close(wfd).chain_err(|| "could not close wfd")?;
+
+    // wait for trigger
+    if tsocketfd != -1 {
+        listen(tsocketfd, 1)?;
+        let fd = accept(tsocketfd)?;
+        wait_for_pipe_zero(fd, -1)?;
+        close(fd).chain_err(|| "could not close accept fd")?;
+        close(tsocketfd).chain_err(|| "could not close trigger fd")?;
+    }
+
+    do_exec(&spec.process.args[0], &spec.process.args, &spec.process.env)?;
+    Ok(Pid::from_raw(-1))
+}
+
+fn secure_container(spec: &Spec, linux: &Linux) -> Result<()> {
     // NOTE: if we want init to pass signals to other processes, we may want
     //       to hold on to cap kill until after the final fork.
     if spec.process.no_new_privileges {
@@ -1287,34 +1345,7 @@ fn run_container(
             capabilities::drop_privileges(c)?;
         }
     }
-
-    // notify first parent that it can continue
-    debug!("writing zero to pipe to trigger poststart");
-    let data: &[u8] = &[0];
-    write(wfd, data).chain_err(|| "failed to write zero")?;
-
-    if init {
-        if init_only && tsocketfd == -1 {
-            scout(spec, wfd, daemonize)?;
-        } else {
-            fork_final_child(spec, wfd, tsocketfd, daemonize)?;
-        }
-    }
-
-    // we nolonger need wfd, so close it
-    close(wfd).chain_err(|| "could not close wfd")?;
-
-    // wait for trigger
-    if tsocketfd != -1 {
-        listen(tsocketfd, 1)?;
-        let fd = accept(tsocketfd)?;
-        wait_for_pipe_zero(fd, -1)?;
-        close(fd).chain_err(|| "could not close accept fd")?;
-        close(tsocketfd).chain_err(|| "could not close trigger fd")?;
-    }
-
-    do_exec(&spec.process.args[0], &spec.process.args, &spec.process.env)?;
-    Ok(Pid::from_raw(-1))
+    Ok(())
 }
 
 fn fork_first(
@@ -1382,6 +1413,7 @@ fn fork_first(
             // setup cgroups
             let schild = child.to_string();
             cgroups::apply(&linux.resources, &schild, cpath)?;
+
             // notify child
             pcond.notify().chain_err(|| "failed to notify child")?;
 
@@ -1428,6 +1460,8 @@ fn fork_first(
             signals::pass_signals(pid)?;
             let sig = wait_for_pipe_sig(rfd, -1)?;
             let (exit_code, _) = wait_for_child(pid)?;
+            let process_cgroup = format!("{}/{}", &cpath, ENYA_PROCESS_CGROUP);
+            cgroups::enya_remove(&process_cgroup)?;
             cgroups::remove(cpath)?;
             exit(exit_code as i8, sig)?;
         }
@@ -1441,7 +1475,7 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
     match fork()? {
         ForkResult::Child => {
             if init {
-                set_name("scout")?;
+                set_name("System")?;
             } else if daemonize {
                 // NOTE: if we are daemonizing non-init, we need an additional
                 //       fork to allow process to be reparented to init
@@ -1466,28 +1500,65 @@ fn fork_enter_pid(init: bool, daemonize: bool) -> Result<()> {
 }
 
 fn fork_final_child(
+    cgroups_path: &str,
     spec: &Spec,
     wfd: RawFd,
     tfd: RawFd,
     daemonize: bool,
 ) -> Result<()> {
+    let ccond = Cond::new().chain_err(|| "failed to create cond")?;
+    let (rfd, wfd) =
+        pipe2(OFlag::O_CLOEXEC).chain_err(|| "failed to create pipe")?;
     // fork again so child becomes pid 2
     match fork()? {
         ForkResult::Child => {
+            close(rfd).chain_err(|| "could not close rfd")?;
+            ccond.notify().chain_err(|| "failed to notify parent")?;
             // child continues on
             Ok(())
         }
         ForkResult::Parent { .. } => {
+            close(wfd).chain_err(|| "could not close rfd")?;
+            ccond.wait().chain_err(|| "failed to wait for child")?;
+
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
-            scout(spec, wfd, daemonize)?;
+
+            system(cgroups_path, spec, wfd, daemonize)?;
             Ok(())
         }
     }
 }
 
-fn scout(spec: &Spec, wfd: RawFd, daemonize: bool) -> Result<()> {
+fn final_enya_setup(cgroups_path: &str, spec: &Spec) -> Result<()> {
+    // At this point, pid 2 exists.
+    let process_pid: &str = "2";
+    cgroups::move_enya_process(
+        cgroups_path,
+        process_pid,
+        ENYA_PROCESS_CGROUP)?;
+
+    /*
+    if let Some(ref resources) = &linux.resources {
+        if let Some(ref mem) = &resources.memory {
+            println!("YES");
+        }
+
+        if let Some(ref cpu) = &resources.cpu {
+            println!("YES");
+        }
+    }
+    */
+    Ok(())
+}
+
+fn system(
+    cgroups_path: &str, 
+    spec: &Spec, 
+    wfd: RawFd, 
+    daemonize: bool
+    ) -> Result<()> {
     if daemonize {
         close(wfd).chain_err(|| "could not close wfd")?;
     }

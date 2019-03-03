@@ -15,6 +15,57 @@ pub fn init() {
     initialize(&MOUNTS);
     initialize(&DEFAULT_ALLOWED_DEVICES);
     initialize(&APPLIES);
+    initialize(&ENYA_SUBSYSTEMS);
+}
+
+pub fn move_enya_process(
+    cgroups_path: &str, 
+    pid: &str, 
+    cgroup_name: &str
+    ) -> Result<()>  {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let dir = if let Some(s) = path(key, cgroups_path) {
+            s
+        } else {
+            continue;
+        };
+        let process_dir = format!("{}/{}", dir, cgroup_name);
+        println!("writing to procs cgroup{}", &process_dir);
+        for k in key.split(',') {
+            if let Some(cgroup_apply) = APPLIES.get(k) {
+                write_file(&process_dir, "cgroup.procs", pid)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn enya_process_setup(
+    cgroups_path: &str,
+    cgroup_name: &str
+    )-> Result<()> {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let dir = if let Some(s) = path(key, cgroups_path) {
+            s
+        } else {
+            continue;
+        };
+        // i.e., /sys/fs/cgroup/memory/process
+        let process_dir = format!("{}/{}", dir, cgroup_name);
+        println!("creating cgroup dir {}", &process_dir);
+        debug! {"creating cgroup dir {}", &process_dir};
+        let chain = || format!("create cgroup dir {} failed", &process_dir);
+        create_dir_all(&process_dir).chain_err(chain)?;
+
+        // Create cgroup for subsystem
+        // No defined resources, just default.
+        for k in key.split(',') {
+            if let Some(cgroup_apply) = APPLIES.get(k) {
+                cgroup_apply(&LinuxResources::default(), &process_dir)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn apply(
@@ -30,6 +81,7 @@ pub fn apply(
         };
         // ensure cgroup dir
         debug! {"creating cgroup dir {}", &dir};
+        println!("creating cgroup dir {}", &dir);
         let chain = || format!("create cgroup dir {} failed", &dir);
         create_dir_all(&dir).chain_err(chain)?;
         // enter cgroups
@@ -44,6 +96,21 @@ pub fn apply(
                 write_file(&dir, "cgroup.procs", pid)?;
             }
         }
+    }
+    Ok(())
+}
+
+pub fn enya_remove(cgroups_path: &str) -> Result<()> {
+    for key in ENYA_SUBSYSTEMS.keys() {
+        let dir = if let Some(s) = path(key, cgroups_path) {
+            s
+        } else {
+            continue;
+        };
+        debug! {"removing cgroup dir {}", &dir};
+        // remove cgroup dir
+        let chain = || format!("remove cgroup dir {} failed", &dir);
+        remove_dir(&dir).chain_err(chain)?;
     }
     Ok(())
 }
@@ -290,6 +357,16 @@ lazy_static! {
             access: "rwm".to_string(),
         });
         v
+    };
+}
+
+lazy_static! {
+    static ref ENYA_SUBSYSTEMS: HashMap<&'static str, Apply> = {
+        let mut m: HashMap<&'static str, Apply> = HashMap::new();
+        m.insert("cpu", cpu_apply);
+        m.insert("memory", memory_apply);
+        m.insert("blkio", blkio_apply);
+        m
     };
 }
 
