@@ -5,8 +5,9 @@ enya builds on [railcar](https://github.com/oracle/railcar), an OCI compliant co
 Any general additions will be contributed upstream.
 
 # Overview
-
-![enya](Enya.png?raw=true "Architecture")
+<p align="center">
+  <img src="Enya.png">
+</p>
 
 enya initializes pid 1 as the **System** process (similar to init process in railcar). 
 The System process constructs the specified cgroups setup and takes a share (%) of CPU and Memory.
