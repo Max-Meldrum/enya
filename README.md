@@ -6,6 +6,8 @@ Any general additions will be contributed upstream.
 
 # Overview
 
+![enya](Enya.png?raw=true "Architecture")
+
 enya initializes pid 1 as the **System** process (similar to init process in railcar). 
 The System process constructs the specified cgroups setup and takes a share (%) of CPU and Memory.
 It then places the actual container **Process** (child) into a new cgroup, in order to have full control of the running container binary.
