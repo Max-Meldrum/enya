@@ -146,6 +146,9 @@ const INIT_PID: &'static str = "init.pid";
 const PROCESS_PID: &'static str = "process.pid";
 const TSOCKETFD: RawFd = 9;
 const ENYA_PROCESS_CGROUP: &'static str = "process";
+const ENYA_PROCESS_SHARE: f64 = 0.85;
+const ENYA_SYSTEM_CGROUP: &'static str = "system";
+const ENYA_SYSTEM_SHARE: f64 = 0.15;
 
 #[cfg(feature = "nightly")]
 static mut ARGC: isize = 0 as isize;
@@ -1178,11 +1181,12 @@ fn run_container(
             .chain_err(|| "failed to init rootfs")?;
     }
 
-    // Set up cgroup for enya process
+    // Set up cgroups for enya
     // NOTE: it only creates the cgroups.
     //       1. No pid is written to cgroup.procs
     //       2. No resources are specified
-    cgroups::enya_process_setup(&cpath, ENYA_PROCESS_CGROUP)?;
+    cgroups::enya_setup(&cpath, ENYA_PROCESS_CGROUP)?;
+    cgroups::enya_setup(&cpath, ENYA_SYSTEM_CGROUP)?;
 
     if !init_only {
         // notify first parent that it can continue
@@ -1200,7 +1204,7 @@ fn run_container(
 
     if cf.contains(CloneFlags::CLONE_NEWNS) {
         mounts::pivot_rootfs(&*rootfs)
-           .chain_err(|| "failed to pivot rootfs")?;
+            .chain_err(|| "failed to pivot rootfs")?;
 
         // only set sysctls in newns
         for (key, value) in &linux.sysctl {
@@ -1442,6 +1446,8 @@ fn fork_first(
             let (exit_code, _) = wait_for_child(pid)?;
             let process_cgroup = format!("{}/{}", &cpath, ENYA_PROCESS_CGROUP);
             cgroups::enya_remove(&process_cgroup)?;
+            let system_cgroup = format!("{}/{}", &cpath, ENYA_SYSTEM_CGROUP);
+            cgroups::enya_remove(&system_cgroup)?;
             cgroups::remove(cpath)?;
             exit(exit_code as i8, sig)?;
         }
@@ -1501,68 +1507,115 @@ fn fork_final_child(
             close(wfd).chain_err(|| "could not close rfd")?;
             ccond.wait().chain_err(|| "failed to wait for child")?;
 
-            let cgroup_mount = spec
-                .mounts
-                .iter()
-                .find(|m| m.typ == "cgroup");
+            let cgroup_mount = spec.mounts.iter().find(|m| m.typ == "cgroup");
 
             let cgroup_mount_path = &cgroup_mount
                 .expect("Could not locate cgroups mount path")
                 .destination;
 
             final_enya_setup(&cgroup_mount_path, spec)?;
+            secure_container(
+                spec,
+                spec.linux.as_ref().expect("Failed to unwrap Linux in Spec"),
+            );
 
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
 
-            system(cgroups_path, spec, wfd, daemonize)?;
+            system(&cgroup_mount_path, spec, wfd, daemonize)?;
             Ok(())
         }
     }
 }
 
 fn final_enya_setup(cgroups_path: &str, spec: &Spec) -> Result<()> {
+    let system_pid: &str = "0"; // meaning this process
+    cgroups::move_enya(cgroups_path, system_pid, ENYA_SYSTEM_CGROUP)?;
+
     // At this point, pid 2 is running.
-    // However, the cgroups mount is read-only,
-    // and we have not specified resources or moved the pid.
-    
     let process_pid: &str = "2";
-    cgroups::move_enya_process(
-        cgroups_path,
-        process_pid,
-        ENYA_PROCESS_CGROUP)?;
+    cgroups::move_enya(cgroups_path, process_pid, ENYA_PROCESS_CGROUP)?;
 
-    // TODO: 
-    //      1.  split mem/cpu resources for System/Process
-    //      2.  remount cgroup to readonly
+    let share_check = (ENYA_SYSTEM_SHARE + ENYA_PROCESS_SHARE) as u32;
+    assert_eq!(share_check * 100, 100);
 
-    mounts::enya_remount(spec)?;
-    /*
-    if let Some(ref resources) = &linux.resources {
+    if let Some(ref resources) = &spec.clone().linux.unwrap().resources {
         if let Some(ref mem) = &resources.memory {
-            println!("YES");
+            if let Some(limit) = mem.limit {
+                debug!("Memory limit: {}", limit);
+                let mem_limit_file = "memory.limit_in_bytes";
+
+                // System
+                let system_limit = (limit as f64 * ENYA_SYSTEM_SHARE) as u64;
+                let system_limit_str: &str = &system_limit.to_string();
+                let sys_mem_dir =
+                    format!("{}/memory/{}", cgroups_path, ENYA_SYSTEM_CGROUP);
+                cgroups::write_file(
+                    &sys_mem_dir,
+                    mem_limit_file,
+                    system_limit_str,
+                )?;
+
+                // Process
+                let process_limit = (limit as f64 * ENYA_PROCESS_SHARE) as u64;
+                let process_limit_str: &str = &process_limit.to_string();
+                let process_mem_dir =
+                    format!("{}/memory/{}", cgroups_path, ENYA_PROCESS_CGROUP);
+                cgroups::write_file(
+                    &process_mem_dir,
+                    mem_limit_file,
+                    process_limit_str,
+                )?;
+            }
         }
 
         if let Some(ref cpu) = &resources.cpu {
-            println!("YES");
+            if let Some(shares) = cpu.shares {
+                debug!("CPU shares: {}", shares);
+                let cpu_shares_file = "cpu.shares";
+
+                // System
+                let sys_share = (shares as f64 * ENYA_SYSTEM_SHARE) as u64;
+                let sys_share_str: &str = &sys_share.to_string();
+                let sys_shares_dir =
+                    format!("{}/cpu/{}", cgroups_path, ENYA_SYSTEM_CGROUP);
+                cgroups::write_file(
+                    &sys_shares_dir,
+                    cpu_shares_file,
+                    sys_share_str,
+                )?;
+
+                // Process
+                let process_share = (shares as f64 * ENYA_PROCESS_SHARE) as u64;
+                let process_share_str: &str = &process_share.to_string();
+                let process_shares_dir =
+                    format!("{}/cpu/{}", cgroups_path, ENYA_PROCESS_CGROUP);
+                cgroups::write_file(
+                    &process_shares_dir,
+                    cpu_shares_file,
+                    process_share_str,
+                )?;
+            }
         }
     }
-    */
+
+    // Return the cgroups mount to read-only
+    mounts::enya_remount(spec)?;
     Ok(())
 }
 
 fn system(
-    cgroups_path: &str, 
-    spec: &Spec, 
-    wfd: RawFd, 
-    daemonize: bool
-    ) -> Result<()> {
+    cgroups_path: &str,
+    spec: &Spec,
+    wfd: RawFd,
+    daemonize: bool,
+) -> Result<()> {
     if daemonize {
         close(wfd).chain_err(|| "could not close wfd")?;
     }
 
-    match System::new(spec.clone()) {
+    match System::new(spec.clone(), Some(cgroups_path.to_string())) {
         Ok(system) => system.start(),
         Err(e) => {
             error!("{:?}", e);

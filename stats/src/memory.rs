@@ -1,7 +1,7 @@
 use crate::util;
 
-const MEMORY_USAGE: &str = "memory/memory.usage_in_bytes";
-const MEMORY_LIMIT: &str = "memory/memory.limit_in_bytes";
+const MEMORY_USAGE: &str = "memory.usage_in_bytes";
+const MEMORY_LIMIT: &str = "memory.limit_in_bytes";
 
 // LOW: >= 0 <= 30
 // MEDIUM: > 30 <= 60

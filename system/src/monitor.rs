@@ -4,8 +4,8 @@ use kompact::prelude::BufMut;
 use kompact::*;
 use std::time::Duration;
 
-use api::kompact_api::*;
 use api::kompact_api::ProtoSer;
+use api::kompact_api::*;
 
 use stats::cpu::Cpu;
 use stats::io::*;
@@ -28,24 +28,31 @@ pub struct Monitor {
     network: Option<Network>,
     io: Option<Io>,
     subscribers: Vec<ActorPath>,
+    cgroup_name: String,
 }
 
 impl Monitor {
     pub fn new(
         path: String,
+        cgroup_name: String,
         interface: Option<String>,
         timeout: Option<u64>,
     ) -> Monitor {
+        let mem_path = format!("{}/memory/{}/", path, cgroup_name);
+        let cpu_path = format!("{}/cpu/{}/", path, cgroup_name);
+        let blkio_path = format!("{}/blkio/{}/", path, cgroup_name);
+
         Monitor {
             ctx: ComponentContext::new(),
             timeout_ms: timeout.unwrap_or(DEFAULT_TIMEOUT_MS),
             collect_timer: None,
             cgroups_path: path.clone(),
-            memory: Memory::new(path.clone()),
-            cpu: Cpu::new(path.clone()),
+            memory: Memory::new(mem_path),
+            cpu: Cpu::new(cpu_path),
             network: interface.and_then(|i| Some(Network::new(i))),
-            io: Some(Io::new(path)),
+            io: Some(Io::new(blkio_path)),
             subscribers: Vec::new(),
+            cgroup_name,
         }
     }
 
@@ -144,7 +151,8 @@ impl Actor for Monitor {
         _ser_id: u64,
         buf: &mut Buf,
     ) {
-        let result: Result<api::Subscribe, SerError> = ProtoSer::deserialise(buf);
+        let result: Result<api::Subscribe, SerError> =
+            ProtoSer::deserialise(buf);
 
         if let Ok(res) = result {
             debug!(self.ctx.log(), "Adding subscriber {}", sender);
@@ -183,15 +191,23 @@ mod tests {
     }
 
     impl Actor for Subscriber {
-        fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {
-        }
-        fn receive_message(&mut self, sender: ActorPath, _ser_id: u64, buf: &mut Buf) {
-            let result: Result<api::MetricReport, SerError> = ProtoSer::deserialise(buf);
+        fn receive_local(&mut self, _sender: ActorRef, msg: Box<Any>) {}
+        fn receive_message(
+            &mut self,
+            sender: ActorPath,
+            _ser_id: u64,
+            buf: &mut Buf,
+        ) {
+            let result: Result<api::MetricReport, SerError> =
+                ProtoSer::deserialise(buf);
             if let Ok(report) = result {
                 self.reports_received += 1;
                 info!(self.ctx.log(), "MetricReport: {:?}", report);
             } else {
-                error!(self.ctx.log(), "Got unexpected message from {}", sender);
+                error!(
+                    self.ctx.log(),
+                    "Got unexpected message from {}", sender
+                );
             }
         }
     }
@@ -226,6 +242,7 @@ mod tests {
         let monitor = system.create_and_register(move || {
             Monitor::new(
                 String::from("/sys/fs/cgroup/"),
+                "".to_string(),
                 None,
                 Some(250),
             )
@@ -257,9 +274,8 @@ mod tests {
             vec!["monitor".into()],
         ));
 
-        let subscriber = sub_system.create_and_register(move || {
-            Subscriber::new(monitor_path)
-        });
+        let subscriber = sub_system
+            .create_and_register(move || Subscriber::new(monitor_path));
 
         sub_system.start(&subscriber);
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -267,4 +283,3 @@ mod tests {
         assert!(sub.reports_received >= 1);
     }
 }
-

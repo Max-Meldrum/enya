@@ -12,8 +12,8 @@ lazy_static! {
         clock_ticks().expect("Unable to fetch clock ticks from sysconf");
 }
 
-const CPUACCT_USAGE: &str = "cpu/cpuacct.usage";
-const CPUACCT_USAGE_PERCPU: &str = "cpu/cpuacct.usage_percpu";
+const CPUACCT_USAGE: &str = "cpuacct.usage";
+const CPUACCT_USAGE_PERCPU: &str = "cpuacct.usage_percpu";
 const NANO_PER_SEC: u64 = 1_000_000_000;
 
 #[derive(Debug)]
@@ -121,7 +121,7 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
+    const CGROUPS_PATH: &str = "/sys/fs/cgroup/cpu/";
 
     #[test]
     fn cpu_usage() {

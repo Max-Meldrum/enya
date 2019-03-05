@@ -18,23 +18,20 @@ pub fn init() {
     initialize(&ENYA_SUBSYSTEMS);
 }
 
-pub fn move_enya_process(
-    cgroups_path: &str, 
-    pid: &str, 
-    cgroup_name: &str
-    ) -> Result<()>  {
+pub fn move_enya(
+    cgroups_path: &str,
+    pid: &str,
+    cgroup_name: &str,
+) -> Result<()> {
     for key in ENYA_SUBSYSTEMS.keys() {
         let process_dir = format!("{}/{}/{}", cgroups_path, key, cgroup_name);
-        println!("writing procs cgroup{}", &process_dir);
+        debug! {"writing pid to cgroup {}", &process_dir};
         write_file(&process_dir, "cgroup.procs", pid)?;
     }
     Ok(())
 }
 
-pub fn enya_process_setup(
-    cgroups_path: &str,
-    cgroup_name: &str
-    )-> Result<()> {
+pub fn enya_setup(cgroups_path: &str, cgroup_name: &str) -> Result<()> {
     for key in ENYA_SUBSYSTEMS.keys() {
         let dir = if let Some(s) = path(key, cgroups_path) {
             s
