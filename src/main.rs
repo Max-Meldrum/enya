@@ -1537,7 +1537,7 @@ fn final_enya_setup(cgroups_path: &str, spec: &Spec) -> Result<()> {
     //      1.  split mem/cpu resources for System/Process
     //      2.  remount cgroup to readonly
 
-    //mounts::enya_remount(ENYA_PROCESS_CGROUP)?;
+    mounts::enya_remount(spec)?;
     /*
     if let Some(ref resources) = &linux.resources {
         if let Some(ref mem) = &resources.memory {
