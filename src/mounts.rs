@@ -77,7 +77,7 @@ pub fn init_rootfs(
         }
         let (flags, data) = parse_mount(m);
         if m.typ == "cgroup" {
-            mount_cgroups(m, rootfs, flags, &data, &linux.mount_label, cpath)?;
+            mount_cgroups(m, rootfs, flags & !MsFlags::MS_RDONLY, &data, &linux.mount_label, cpath)?;
         } else if m.destination == "/dev" {
             // dev can't be read only yet because we have to mount devices
             mount_from(
@@ -110,7 +110,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath>(path: &P) -> Result<()> {
         open("/", OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(close(oldroot).unwrap());
     let newroot =
-        open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
+       open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(close(newroot).unwrap());
     pivot_root(path, path)?;
     umount2("/", MntFlags::MNT_DETACH)?;
@@ -153,6 +153,10 @@ pub fn finish_rootfs(spec: &Spec) -> Result<()> {
     }
 
     umask(Mode::from_bits_truncate(0o022));
+    Ok(())
+}
+pub fn enya_remount(cgroup_name: &str) -> Result<()> {
+    // TODO
     Ok(())
 }
 

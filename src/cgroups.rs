@@ -24,18 +24,9 @@ pub fn move_enya_process(
     cgroup_name: &str
     ) -> Result<()>  {
     for key in ENYA_SUBSYSTEMS.keys() {
-        let dir = if let Some(s) = path(key, cgroups_path) {
-            s
-        } else {
-            continue;
-        };
-        let process_dir = format!("{}/{}", dir, cgroup_name);
-        println!("writing to procs cgroup{}", &process_dir);
-        for k in key.split(',') {
-            if let Some(cgroup_apply) = APPLIES.get(k) {
-                write_file(&process_dir, "cgroup.procs", pid)?;
-            }
-        }
+        let process_dir = format!("{}/{}/{}", cgroups_path, key, cgroup_name);
+        println!("writing procs cgroup{}", &process_dir);
+        write_file(&process_dir, "cgroup.procs", pid)?;
     }
     Ok(())
 }
@@ -52,7 +43,6 @@ pub fn enya_process_setup(
         };
         // i.e., /sys/fs/cgroup/memory/process
         let process_dir = format!("{}/{}", dir, cgroup_name);
-        println!("creating cgroup dir {}", &process_dir);
         debug! {"creating cgroup dir {}", &process_dir};
         let chain = || format!("create cgroup dir {} failed", &process_dir);
         create_dir_all(&process_dir).chain_err(chain)?;
@@ -81,7 +71,6 @@ pub fn apply(
         };
         // ensure cgroup dir
         debug! {"creating cgroup dir {}", &dir};
-        println!("creating cgroup dir {}", &dir);
         let chain = || format!("create cgroup dir {} failed", &dir);
         create_dir_all(&dir).chain_err(chain)?;
         // enter cgroups
@@ -361,9 +350,9 @@ lazy_static! {
 }
 
 lazy_static! {
-    static ref ENYA_SUBSYSTEMS: HashMap<&'static str, Apply> = {
+    pub static ref ENYA_SUBSYSTEMS: HashMap<&'static str, Apply> = {
         let mut m: HashMap<&'static str, Apply> = HashMap::new();
-        m.insert("cpu", cpu_apply);
+        m.insert("cpu,cpuacct", null_apply); // no settings for cpuacct
         m.insert("memory", memory_apply);
         m.insert("blkio", blkio_apply);
         m

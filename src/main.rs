@@ -1137,12 +1137,6 @@ fn run_container(
         return Ok(child_pid);
     }
 
-    println!("first");
-    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
-    for path in paths {
-        println!("Name: {}", path.unwrap().path().display())
-    }
-
     let mut mount_fd = -1;
     // enter path namespaces
     for &(space, fd) in &to_enter {
@@ -1171,12 +1165,6 @@ fn run_container(
     let chain = || format!("failed to unshare {:?}", cf);
     unshare(cf & !CloneFlags::CLONE_NEWUSER).chain_err(chain)?;
 
-    println!("second");
-    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
-    for path in paths {
-        println!("Name: {}", path.unwrap().path().display())
-    }
-
     if enter_pid {
         fork_enter_pid(init, daemonize)?;
     };
@@ -1185,16 +1173,16 @@ fn run_container(
         sethostname(&spec.hostname)?;
     }
 
+    if cf.contains(CloneFlags::CLONE_NEWNS) {
+        mounts::init_rootfs(spec, rootfs, &cpath, bind_devices)
+            .chain_err(|| "failed to init rootfs")?;
+    }
+
     // Set up cgroup for enya process
     // NOTE: it only creates the cgroups.
     //       1. No pid is written to cgroup.procs
     //       2. No resources are specified
     cgroups::enya_process_setup(&cpath, ENYA_PROCESS_CGROUP)?;
-
-    if cf.contains(CloneFlags::CLONE_NEWNS) {
-        mounts::init_rootfs(spec, rootfs, &cpath, bind_devices)
-            .chain_err(|| "failed to init rootfs")?;
-    }
 
     if !init_only {
         // notify first parent that it can continue
@@ -1212,7 +1200,7 @@ fn run_container(
 
     if cf.contains(CloneFlags::CLONE_NEWNS) {
         mounts::pivot_rootfs(&*rootfs)
-            .chain_err(|| "failed to pivot rootfs")?;
+           .chain_err(|| "failed to pivot rootfs")?;
 
         // only set sysctls in newns
         for (key, value) in &linux.sysctl {
@@ -1285,14 +1273,6 @@ fn run_container(
     debug!("writing zero to pipe to trigger poststart");
     let data: &[u8] = &[0];
     write(wfd, data).chain_err(|| "failed to write zero")?;
-
-    // Debug
-    println!("third");
-    let paths = std::fs::read_dir("/sys/fs/cgroup/memory").unwrap();
-    for path in paths {
-        println!("Name: {}", path.unwrap().path().display())
-    }
-
 
     if init {
         if init_only && tsocketfd == -1 {
@@ -1521,6 +1501,17 @@ fn fork_final_child(
             close(wfd).chain_err(|| "could not close rfd")?;
             ccond.wait().chain_err(|| "failed to wait for child")?;
 
+            let cgroup_mount = spec
+                .mounts
+                .iter()
+                .find(|m| m.typ == "cgroup");
+
+            let cgroup_mount_path = &cgroup_mount
+                .expect("Could not locate cgroups mount path")
+                .destination;
+
+            final_enya_setup(&cgroup_mount_path, spec)?;
+
             if tfd != -1 {
                 close(tfd).chain_err(|| "could not close trigger fd")?;
             }
@@ -1532,13 +1523,21 @@ fn fork_final_child(
 }
 
 fn final_enya_setup(cgroups_path: &str, spec: &Spec) -> Result<()> {
-    // At this point, pid 2 exists.
+    // At this point, pid 2 is running.
+    // However, the cgroups mount is read-only,
+    // and we have not specified resources or moved the pid.
+    
     let process_pid: &str = "2";
     cgroups::move_enya_process(
         cgroups_path,
         process_pid,
         ENYA_PROCESS_CGROUP)?;
 
+    // TODO: 
+    //      1.  split mem/cpu resources for System/Process
+    //      2.  remount cgroup to readonly
+
+    //mounts::enya_remount(ENYA_PROCESS_CGROUP)?;
     /*
     if let Some(ref resources) = &linux.resources {
         if let Some(ref mem) = &resources.memory {
