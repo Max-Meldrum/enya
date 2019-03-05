@@ -78,8 +78,15 @@ pub fn init_rootfs(
         let (flags, data) = parse_mount(m);
         if m.typ == "cgroup" {
             // NOTE: Not setting read-only yet, as Enya has to modify cgroups for System and Process
-            //       enya_remount is called at a later point and remounts it to read-only. 
-            mount_cgroups(m, rootfs, flags & !MsFlags::MS_RDONLY, &data, &linux.mount_label, cpath)?;
+            //       enya_remount is called at a later point and remounts it to read-only.
+            mount_cgroups(
+                m,
+                rootfs,
+                flags & !MsFlags::MS_RDONLY,
+                &data,
+                &linux.mount_label,
+                cpath,
+            )?;
         } else if m.destination == "/dev" {
             // dev can't be read only yet because we have to mount devices
             mount_from(
@@ -112,7 +119,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath>(path: &P) -> Result<()> {
         open("/", OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(close(oldroot).unwrap());
     let newroot =
-       open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
+        open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
     defer!(close(newroot).unwrap());
     pivot_root(path, path)?;
     umount2("/", MntFlags::MNT_DETACH)?;
@@ -167,7 +174,7 @@ pub fn enya_remount(spec: &Spec) -> Result<()> {
         }
         if m.typ == "cgroup" {
             for (key, mount_path) in cgroups::MOUNTS.iter() {
-                let source = if let Some(s) = cgroups::path(key, "") {
+                let _source = if let Some(s) = cgroups::path(key, "") {
                     s
                 } else {
                     continue;
@@ -179,21 +186,15 @@ pub fn enya_remount(spec: &Spec) -> Result<()> {
                 };
 
                 let dest = format! {"{}/{}", &m.destination, &base};
-                debug! ("Remounting to read-only: {}", dest);
+                debug!("Remounting to read-only: {}", dest);
                 let flags = MsFlags::MS_BIND
                     | MsFlags::MS_REC
                     | MsFlags::MS_RDONLY
                     | MsFlags::MS_NODEV
                     | MsFlags::MS_REMOUNT;
-                mount(
-                    Some(&*dest),
-                    &*dest,
-                    None::<&str>,
-                    flags,
-                    None::<&str>,
-                    )?;
+                mount(Some(&*dest), &*dest, None::<&str>, flags, None::<&str>)?;
             }
-        } 
+        }
     }
     Ok(())
 }

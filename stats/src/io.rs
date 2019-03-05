@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use crate::error::ErrorKind::*;
 use crate::error::*;
 
-const BLKIO_SERVICE_BYTES: &str = "blkio/blkio.io_service_bytes";
+const BLKIO_SERVICE_BYTES: &str = "blkio.io_service_bytes";
 
 #[derive(Debug)]
 pub struct Io {
@@ -14,9 +14,9 @@ pub struct Io {
 }
 
 impl Io {
-    pub fn new(cgroups_path: String) -> Io {
+    pub fn new(path: String) -> Io {
         Io {
-            cgroups_path,
+            cgroups_path: path,
             write: 0,
             read: 0,
         }
@@ -86,7 +86,7 @@ impl Io {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const CGROUPS_PATH: &str = "/sys/fs/cgroup/";
+    const CGROUPS_PATH: &str = "/sys/fs/cgroup/blkio/";
 
     #[test]
     fn blkio_test() {
