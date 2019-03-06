@@ -10,19 +10,26 @@ Any general additions will be contributed upstream.
 </p>
 
 enya initializes pid 1 as the **System** process (similar to init process in railcar). 
-The System process constructs the specified cgroups setup and takes a share (%) of CPU and Memory.
+The System process constructs two separate cgroups, one for itself and the container application.
 It then places the actual container **Process** (child) into a new cgroup, in order to have full control of the running container binary.
 
 # Features
 
-enya currently offers:
+## Metric Subscription Service
 
-1.  Subscription service, where processes, local or non-local can subscribe to metric reports of the enya **Process**.
+Subscription service, where processes, local or non-local can subscribe to metric reports of the enya **Process**. Sure, it is technically possible 
+to fetch the metrics from inside a standard container runtime (runc), but that data will not represent the actual resources that the container application is using.
+It will also include the Memory/IO/CPU usage from the recurring collection of metrics. Also, it will require the application itself to include code for reading metrics from the cgroup subsystems.
 
-There is plans to add additional features. One example being more advanced traffic control (tc), 
-where rules can be set during startup or even on the fly during runtime.
+Possible use cases:
 
-enya is suited for distributed runtimes, especially where dynamic scheduling is required.
+*   Dynamic scheduling decisions, where applications can rely on fine-grained resource metrics and not only a task queue threshold.
+*   To avoid the container being OOM killed, applications may take action, i.e., spill in-memory state to disk.
+
+
+## Traffic Control (Planned)
+
+Enable more advanced traffic strategies, which can be enabled at startup or on the fly during runtime.
 
 # API
 
@@ -30,6 +37,6 @@ The [API](api/protobuf/messages.proto) is defined in Protobuf (version 3) and cu
 
 # License
 
-enya is licensed the under Apache License 2.0.
+enya is licensed under Apache License 2.0.
 
 See [LICENSE](LICENSE) for more details.
