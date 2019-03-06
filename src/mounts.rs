@@ -77,7 +77,16 @@ pub fn init_rootfs(
         }
         let (flags, data) = parse_mount(m);
         if m.typ == "cgroup" {
-            mount_cgroups(m, rootfs, flags, &data, &linux.mount_label, cpath)?;
+            // NOTE: Not setting read-only yet, as Enya has to modify cgroups for System and Process
+            //       enya_remount is called at a later point and remounts it to read-only.
+            mount_cgroups(
+                m,
+                rootfs,
+                flags & !MsFlags::MS_RDONLY,
+                &data,
+                &linux.mount_label,
+                cpath,
+            )?;
         } else if m.destination == "/dev" {
             // dev can't be read only yet because we have to mount devices
             mount_from(
@@ -153,6 +162,40 @@ pub fn finish_rootfs(spec: &Spec) -> Result<()> {
     }
 
     umask(Mode::from_bits_truncate(0o022));
+    Ok(())
+}
+
+// Makes sure that the cgroup subsystems are read-only
+pub fn enya_remount(spec: &Spec) -> Result<()> {
+    for m in &spec.mounts {
+        if !m.destination.starts_with('/') || m.destination.contains("..") {
+            let msg = format!("invalid mount destination: {}", m.destination);
+            return Err(ErrorKind::InvalidSpec(msg).into());
+        }
+        if m.typ == "cgroup" {
+            for (key, mount_path) in cgroups::MOUNTS.iter() {
+                let _source = if let Some(s) = cgroups::path(key, "") {
+                    s
+                } else {
+                    continue;
+                };
+                let base = if let Some(o) = mount_path.rfind('/') {
+                    &mount_path[o + 1..]
+                } else {
+                    &mount_path[..]
+                };
+
+                let dest = format! {"{}/{}", &m.destination, &base};
+                debug!("Remounting to read-only: {}", dest);
+                let flags = MsFlags::MS_BIND
+                    | MsFlags::MS_REC
+                    | MsFlags::MS_RDONLY
+                    | MsFlags::MS_NODEV
+                    | MsFlags::MS_REMOUNT;
+                mount(Some(&*dest), &*dest, None::<&str>, flags, None::<&str>)?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -232,7 +275,7 @@ fn mount_cgroups(
         } else {
             &mount_path[..]
         };
-        let dest = format!{"{}/{}", &m.destination, &base};
+        let dest = format! {"{}/{}", &m.destination, &base};
         let bm = Mount {
             source: source,
             typ: "bind".to_string(),
@@ -249,14 +292,14 @@ fn mount_cgroups(
         for k in key.split(',') {
             if k != key {
                 // try to create a symlink for combined strings
-                let dest = format!{"{}{}/{}", rootfs, &m.destination, &k};
+                let dest = format! {"{}{}/{}", rootfs, &m.destination, &k};
                 symlink(key, &dest)?;
             }
         }
     }
     // remount readonly if necessary
     if flags.contains(MsFlags::MS_RDONLY) {
-        let dest = format!{"{}{}", rootfs, &m.destination};
+        let dest = format! {"{}{}", rootfs, &m.destination};
         mount(
             Some(&*dest),
             &*dest,
@@ -299,15 +342,15 @@ fn mount_from(
     let d;
     if !label.is_empty() && m.typ != "proc" && m.typ != "sysfs" {
         if data.is_empty() {
-            d = format!{"context=\"{}\"", label};
+            d = format! {"context=\"{}\"", label};
         } else {
-            d = format!{"{},context=\"{}\"", data, label};
+            d = format! {"{},context=\"{}\"", data, label};
         }
     } else {
         d = data.to_string();
     }
 
-    let dest = format!{"{}{}", rootfs, &m.destination};
+    let dest = format! {"{}{}", rootfs, &m.destination};
 
     debug!(
         "mounting {} to {} as {} with data '{}'",
@@ -351,7 +394,7 @@ fn mount_from(
         mount(Some(&*src), &*dest, Some(&*m.typ), flags, Some(data))?;
         // warn if label cannot be set
         if let Err(e) = setfilecon(&dest, label) {
-            warn!{"could not set mount label of {} to {}: {}",
+            warn! {"could not set mount label of {} to {}: {}",
             &m.destination, &label, e};
         }
     }
@@ -364,7 +407,8 @@ fn mount_from(
                 | MsFlags::MS_PRIVATE
                 | MsFlags::MS_SHARED
                 | MsFlags::MS_SLAVE),
-        ) {
+        )
+    {
         let chain = || format!("remount of {} failed", &dest);
         mount(
             Some(&*dest),
@@ -372,7 +416,8 @@ fn mount_from(
             None::<&str>,
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
-        ).chain_err(chain)?;
+        )
+        .chain_err(chain)?;
     }
     Ok(())
 }

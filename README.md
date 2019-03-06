@@ -1,129 +1,42 @@
-# `railcar` - rust implementation of the oci-runtime spec #
+# enya
 
-![railcar](https://github.com/oracle/railcar/raw/master/railcar.png
-"railcar")
+enya builds on [railcar](https://github.com/oracle/railcar), an OCI compliant container runtime, to form a Special Purpose Container Runtime.
 
-## What is `railcar`? ##
+Any general additions will be contributed upstream.
 
-`railcar` is a rust implementation of the [opencontainers
-initiative](https://www.opencontainers.org/)'s [runtime
-spec](https://github.com/opencontainers/runtime-spec). It is similar to the
-reference implementation `runc`, but it is implemented completely in rust for
-memory safety without needing the overhead of a garbage collector or multiple
-threads. For more information on the development of railcar, check out
-[Building a Container Runtime in
-Rust](https://blogs.oracle.com/developers/building-a-container-runtime-in-rust)
+# Overview
+<p align="center">
+  <img src="Enya.png">
+</p>
 
-## Building `railcar` ##
+enya initializes pid 1 as the **System** process (similar to init process in railcar). 
+The System process constructs two separate cgroups, one for itself and the container application.
+It then places the actual container **Process** (child) into a new cgroup, in order to have full control of the running container binary.
 
-[![wercker status](https://app.wercker.com/status/730e874772dc02c6005f4ae4e42b0ca4/s/master "wercker status")](https://app.wercker.com/project/byKey/730e874772dc02c6005f4ae4e42b0ca4)
+# Features
 
-Install rust:
+## Metric Subscription Service
 
-    curl https://sh.rustup.rs -sSf | sh
-    cargo install cargo-when
-    rustup toolchain install stable-x86_64-unknown-linux-gnu
-    rustup default stable-x86_64-unknown-linux-gnu # for stable
-    rustup target install x86_64-unknown-linux-musl # for stable
-    rustup toolchain install nightly-x86_64-unknown-linux-gnu
-    rustup default nightly-x86_64-unknown-linux-gnu # for nightly
-    rustup target install x86_64-unknown-linux-musl # for nightly
+Subscription service, where processes, local or non-local can subscribe to metric reports of the enya **Process**. Sure, it is technically possible 
+to fetch the metrics from inside a standard container runtime (runc), but that data will not represent the actual resources that the container application is using.
+It will also include the Memory/IO/CPU usage from the recurring collection of metrics. Also, it will require the application itself to include code for reading metrics from the cgroup subsystems.
 
-Building can be done via build.sh:
+Possible use cases:
 
-    build.sh
+*   Dynamic scheduling decisions, where applications can rely on fine-grained resource metrics and not only a task queue threshold.
+*   To avoid the container being OOM killed, applications may take action, i.e., spill in-memory state to disk.
 
-By default, build.sh builds a dynamic binary using gnu. To build a static
-binary, set `TARGET` to `x86_64-unknown-linux-musl`:
 
-    TARGET=x86_64-unknown-linux-musl ./build.sh
+## Traffic Control (Planned)
 
-Build requirements for TARGET=x86_64-unknown-linux-gnu:
+Enable more advanced traffic strategies, which can be enabled at startup or on the fly during runtime.
 
-    libseccomp-devel
+# API
 
-Build requirements for TARGET=x86_64-unknown-linux-musl:
+The [API](api/protobuf/messages.proto) is defined in Protobuf (version 3) and currently supports [kompact](https://github.com/kompics/kompact). However, it can be extended to gRPC as well.
 
-    git submodule update --init
-    autotools
-    make
-    gcc
-    musl-gcc
+# License
 
-To build a release version:
+enya is licensed under Apache License 2.0.
 
-    build.sh --release
-
-If you build using stable instead of nightly, the set_name feature will be
-disabled and the init process inside the container will not be named rc-init
-when viewed via ps or /proc/$pid/cmdline.
-
-## Using `railcar` ##
-
-    ./railcar run
-
-You can specify a different bundle directory where your config.json is
-located with -b:
-
-    ./railcar -b /some/other/directory run
-
-## Using `railcar` with docker ##
-
-`railcar` can be used as a backend for docker. To use it, start the docker
-daemon with an additional backend:
-
-    dockerd ... --experimental --add-runtime "rc=/path/to/railcar"
-
-Then you can use `railcar` by specifying the `rc` backend:
-
-    docker run -it --rm --runtime rc hello
-
-Note that you should start the daemon with a terminal (the -t option) so that
-docker can properly collect stdout and stderr from `railcar`. If you want to
-daemonize the container, just use:
-
-    docker run -dt --rm --runtime rc hello
-
-## Differences from `runc` ##
-
-In general, `railcar` is very similar to `runc`, but some of the `runc`
-commands are not supported. Currently, `railcar` does not support the following
-commands:
-
-     checkpoint
-     events
-     exec
-     init
-     list
-     pause
-     restore
-     resume
-     spec
-
-Also, `railcar` always runs an init process separately from the container
-process.
-
-## Contributing ##
-
-`railcar` is an open source project. See [CONTRIBUTING](CONTRIBUTING.md) for
-details.
-
-Oracle gratefully acknowledges the contributions to railcar that have been made
-by the community.
-
-## Getting in touch ##
-
-The best way to get in touch is Slack.
-
-Click [here](https://join.slack.com/t/oraclecontainertools/shared_invite/enQtMzIwNzg3NDIzMzE5LTIwMjZlODllMWRmNjMwZGM1NGNjMThlZjg3ZmU3NDY1ZWU5ZGJmZWFkOTBjNzk0ODIxNzQ2ODUyNThiNmE0MmI) to join the the [Oracle Container Tools workspace](https://oraclecontainertools.slack.com).
-
-Then join the [Railcar channel](https://oraclecontainertools.slack.com/messages/C8BP6MEA0).
-
-## License ##
-
-Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
-
-`railcar` is dual licensed under the Universal Permissive License 1.0 and the
-Apache License 2.0.
-
-See [LICENSE](LICENSE.txt) for more details.
+See [LICENSE](LICENSE) for more details.

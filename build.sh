@@ -10,5 +10,5 @@ fi
 cargo when --channel=stable build --verbose $TGT $1 && \
 cargo when --channel=beta build --verbose $TGT $1 && \
 cargo when --channel=nightly build --verbose --features nightly $TGT $1 && \
-rm -f railcar
-cp target/$TARGET/$VERSION/railcar .
+rm -f enya
+cp target/$TARGET/$VERSION/enya .

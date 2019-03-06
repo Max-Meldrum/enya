@@ -1,0 +1,10 @@
+[package]
+name = "stats"
+version = "0.1.0"
+authors = ["Max Meldrum <mmeldrum@kth.se>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2"
+lazy_static = "1.2.0"
+

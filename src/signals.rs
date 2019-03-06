@@ -81,7 +81,7 @@ pub fn to_signal(signal: &str) -> Result<Signal> {
         "29" | "IO" | "SIGIO" => Signal::SIGIO,
         "30" | "PWR" | "SIGPWR" => Signal::SIGPWR,
         "31" | "SYS" | "SIGSYS" => Signal::SIGSYS,
-        _ => bail!{"{} is not a valid signal", signal},
+        _ => bail! {"{} is not a valid signal", signal},
     })
 }
 
@@ -105,9 +105,11 @@ pub fn raise_for_parent(signal: Signal) -> Result<()> {
     // make sure the signal is unblocked
     let mut s = SigSet::empty();
     s.add(signal);
-    s.thread_unblock().chain_err(|| "failed to unblock signal")?;
+    s.thread_unblock()
+        .chain_err(|| "failed to unblock signal")?;
     // raise the signal
-    raise(signal).chain_err(|| format!("failed to raise signal {:?}", signal))?;
+    raise(signal)
+        .chain_err(|| format!("failed to raise signal {:?}", signal))?;
     Ok(())
 }
 

@@ -1,0 +1,11 @@
+[package]
+name = "kompact"
+version = "0.1.0"
+authors = ["Max Meldrum <mmeldrum@kth.se>"]
+edition = "2018"
+
+[dependencies]
+kompact = { git = "https://github.com/kompics/kompact", branch = "master", features = ["protobuf"]}
+bytes = "0.4"
+api = { path = "../../api" , features = ["kompact_api"] }
+slog = "2.2"
