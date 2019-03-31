@@ -27,7 +27,7 @@ fn main() {
     let system = KompicsSystem::new(cfg);
     let enya_actor_path = ActorPath::from_str(monitor_path_str).unwrap();
 
-    let subscriber = system.create_and_register(move || {
+    let (subscriber, _s) = system.create_and_register(move || {
         Subscriber::new(enya_actor_path)
     });
 

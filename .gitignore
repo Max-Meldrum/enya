@@ -6,3 +6,4 @@ enya
 .gitignore
 .swp
 .*.rs.swp
+messages.rs

@@ -107,7 +107,6 @@ impl Monitor {
 
         let report = self.create_report();
 
-        // TODO: improve?
         for sub in self.subscribers.iter() {
             sub.tell(report.clone(), self);
         }
@@ -239,7 +238,7 @@ mod tests {
 
         let system = KompicsSystem::new(cfg);
 
-        let monitor = system.create_and_register(move || {
+        let (monitor, _m) = system.create_and_register(move || {
             Monitor::new(
                 String::from("/sys/fs/cgroup/"),
                 "".to_string(),
@@ -274,7 +273,7 @@ mod tests {
             vec!["monitor".into()],
         ));
 
-        let subscriber = sub_system
+        let (subscriber, _s)= sub_system
             .create_and_register(move || Subscriber::new(monitor_path));
 
         sub_system.start(&subscriber);

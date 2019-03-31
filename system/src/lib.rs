@@ -84,7 +84,7 @@ impl System {
         );
 
         let cpath = self.cgroups_path.clone();
-        let monitor = self.system.create_and_register(move || {
+        let (monitor, _m) = self.system.create_and_register(move || {
             let interface = if net::find_interface(DEFAULT_INTERFACE) {
                 Some(String::from(DEFAULT_INTERFACE))
             } else {
