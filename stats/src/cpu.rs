@@ -23,7 +23,8 @@ pub struct Cpu {
     per_cpu_path: String,
     pub total_usage: u64,
     pub system_usage: u64,
-    pub percentage: f64,
+    pub avg: f64,
+    collections: u64,
 }
 
 impl Cpu {
@@ -36,7 +37,8 @@ impl Cpu {
             per_cpu_path,
             total_usage: 0,
             system_usage: 0,
-            percentage: 0.0,
+            avg: 0.0,
+            collections: 0,
         }
     }
     pub fn update(&mut self) {
@@ -61,7 +63,16 @@ impl Cpu {
                         cpu_percent = res;
                     }
                 }
-                self.percentage = cpu_percent;
+
+                if self.collections == 0 {
+                    self.avg = cpu_percent;
+                } else {
+                    let ema: f64 = (cpu_percent - self.avg)
+                        * (2.0 / (self.collections + 1) as f64);
+                    self.avg = ema;
+                }
+                self.collections += 1;
+
                 self.total_usage = usage;
                 self.system_usage = sys;
             }
@@ -135,5 +146,15 @@ mod tests {
         let cpu = Cpu::new(CGROUPS_PATH.to_string());
         let res = Cpu::get_per_cpu_usage(&cpu);
         assert!(res.unwrap().len() > 0);
+    }
+
+    #[test]
+    fn avg_cpu() {
+        let mut cpu = Cpu::new(CGROUPS_PATH.to_string());
+        let _ = cpu.update();
+        let avg = cpu.avg;
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = cpu.update();
+        assert!(avg != cpu.avg);
     }
 }
