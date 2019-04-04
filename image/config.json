@@ -141,6 +141,9 @@
             "swappiness": 0,
             "disableOOMKiller": false
           },
+          "cpu": {
+                "shares": 1024
+            },
 			"devices": [
 				{
 					"allow": false,
