@@ -105,11 +105,14 @@ impl Monitor {
             debug!(self.ctx.log(), "IO: {:?}", io);
         }
 
-        let report = self.create_report();
+        if self.subscribers.len() > 0 {
+            let report = self.create_report();
 
-        for sub in self.subscribers.iter() {
-            sub.tell(report.clone(), self);
+            for sub in self.subscribers.iter() {
+                sub.tell(report.clone(), self);
+            }
         }
+
     }
 
     fn stop_collect(&mut self) {
