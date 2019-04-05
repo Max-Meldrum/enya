@@ -93,7 +93,7 @@ impl Monitor {
         let _ = self.memory.update();
         self.cpu.update();
         debug!(self.ctx.log(), "Memory: {}%", self.memory.procentage);
-        debug!(self.ctx.log(), "Cpu: {}%", self.cpu.percentage);
+        debug!(self.ctx.log(), "Cpu: {}%", self.cpu.avg);
 
         if let Some(net) = self.network.as_mut() {
             net.update();
@@ -112,7 +112,6 @@ impl Monitor {
                 sub.tell(report.clone(), self);
             }
         }
-
     }
 
     fn stop_collect(&mut self) {
@@ -276,7 +275,7 @@ mod tests {
             vec!["monitor".into()],
         ));
 
-        let (subscriber, _s)= sub_system
+        let (subscriber, _s) = sub_system
             .create_and_register(move || Subscriber::new(monitor_path));
 
         sub_system.start(&subscriber);

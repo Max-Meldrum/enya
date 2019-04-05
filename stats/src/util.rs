@@ -32,3 +32,9 @@ pub fn read_u64_from(path: &str) -> Result<u64> {
         Err(e) => Err(Error::with_cause(InvalidPath, e)),
     }
 }
+
+pub fn fmt_float(f: f64) -> Result<f64> {
+    format!("{:.2}", f)
+        .parse::<f64>()
+        .map_err(|_| Error::new(ParseError))
+}

@@ -52,27 +52,30 @@ impl Cpu {
                 let system_delta = sys as f64 - self.system_usage as f64;
 
                 if cpu_delta > 0.0 && system_delta > 0.0 {
-                    let per_cpu_len = match self.get_per_cpu_usage() {
-                        Ok(vec) => vec.len(),
-                        Err(_) => 0,
-                    };
+                    let per_cpu_len =
+                        self.get_per_cpu_usage().map(|v| v.len()).unwrap_or(0);
                     let percent =
                         (cpu_delta / system_delta) * per_cpu_len as f64 * 100.0;
-                    let formatted = format!("{:.2}", percent).parse::<f64>();
-                    if let Ok(res) = formatted {
+                    if let Ok(res) = util::fmt_float(percent) {
                         cpu_percent = res;
                     }
                 }
 
-                if self.collections == 0 {
+                // NOTE: we skip putting at 0 as the collections
+                //       depend on known total_usage and system_usage data
+                if self.collections == 1 {
                     self.avg = cpu_percent;
                 } else {
                     let ema: f64 = (cpu_percent - self.avg)
-                        * (2.0 / (self.collections + 1) as f64);
-                    self.avg = ema;
-                }
-                self.collections += 1;
+                        * (2.0 / (self.collections + 1) as f64)
+                        + self.avg;
 
+                    if let Ok(ema_fmt) = util::fmt_float(ema) {
+                        self.avg = ema_fmt;
+                    }
+                }
+
+                self.collections += 1;
                 self.total_usage = usage;
                 self.system_usage = sys;
             }
@@ -152,9 +155,11 @@ mod tests {
     fn avg_cpu() {
         let mut cpu = Cpu::new(CGROUPS_PATH.to_string());
         let _ = cpu.update();
-        let avg = cpu.avg;
         std::thread::sleep(std::time::Duration::from_millis(200));
         let _ = cpu.update();
-        assert!(avg != cpu.avg);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = cpu.update();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(cpu.avg > 0.0);
     }
 }
